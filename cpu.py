@@ -50,8 +50,23 @@ class CPU(object):
         else:
             self.flags &= (0xFF ^ mask)
 
+
+    # do stack pushing and popping actually want to live in the CPU?
+    def stackPush(self, val):
+        raise NotImplementedError()
+
+    def stackPop(self):
+        raise NotImplementedError()
+
+    def printState(self):
+        print ("A = %08x X = %08x Y = %08x flags = %08x" %
+               (self.reg_A, self.reg_X, self.reg_Y, self.flags))
+        instruction = opc.Instruction.fromAddr(self.PC, self)
+        print instruction.disassemble()
+
     def tick(self):
         # let's pretend the clock doesn't exist for now
         instruction = opc.Instruction.fromAddr(self.PC, self)
         self.PC = instruction.nextaddr
         instruction.call(self)
+        self.printState()

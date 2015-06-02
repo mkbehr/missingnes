@@ -2,6 +2,8 @@ import cpu as c
 import mem
 import struct
 
+from warnings import warn
+
 AM = mem.AddrMode
 
 # Length of specifiers for address mode. Instruction length is this + 1.
@@ -57,7 +59,48 @@ class Instruction(object):
         """Returns the memory address to be written to or read from. This will
         depend on the addressing mode."""
         # we convert endianness here
-        raise NotImplementedError()
+        am = self.opcode.addrMode
+        if am == AM.imp:
+            warn("Trying to access memory for implicit-addressing instruction")
+            return None
+        elif am == AM.imm:
+            raise NotImplementedError()
+        elif am == AM.zp:
+            raise NotImplementedError()
+
+        elif am == AM.zpx:
+            raise NotImplementedError()
+
+        elif am == AM.zpy:
+            raise NotImplementedError()
+
+        elif am == AM.izx:
+            raise NotImplementedError()
+
+        elif am == AM.izy:
+            raise NotImplementedError()
+
+        # remember little-endian from here on
+        elif am == AM.abs:
+            return struct.unpack('H', self.addrData)[0]
+        elif am == AM.abx:
+            raise NotImplementedError()
+
+        elif am == AM.aby:
+            raise NotImplementedError()
+
+        elif am == AM.ind:
+            raise NotImplementedError()
+
+        elif am == AM.rel:
+            # here addrData is a signed integer that represents an
+            # offest from the address we'll reach after the
+            # instruction, at least as far as I can tell
+            offset = struct.unpack('b', self.addrData)[0]
+            target = self.addr + offset # no endianness to worry about
+            return target
+        else:
+            raise RuntimeError("Unrecognized addressing mode")
 
     def readMem(self):
         raise NotImplementedError()
