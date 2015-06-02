@@ -72,4 +72,66 @@ opcodes = {}
 def make_op(name, code, addrMode):
     opcodes[code] = Opcode(name, code, addrMode)
 
+def opFamily(name, *args):
+    if (len(args) % 2):
+        raise RuntimeError("opFamily needs an even number of args")
+    for i in range(len(args)/2):
+        make_op(name, args[2*i], args[(2*i)+1])    
+
+## Begin opcode listing
+# see http://www.oxyron.de/html/opcodes02.html
+
+# Logical and arithmetic commands
+opFamily("ORA",
+         0x09, AM.imm,
+         0x05, AM.zp,
+         0x15, AM.zpx,
+         0x01, AM.izx,
+         0x11, AM.izy,
+         0x0D, AM.abs,
+         0x1D, AM.abx,
+         0x19, AM.aby)
+# TODO and, eor, adc, sbc, cmp, cpx, cpy, dec, dex, dey, inc, inx,
+# iny, asl, rol, lsr, ror
+
+# Move commands
+
+opFamily("LDA",
+         0xA9, AM.imm,
+         0xA5, AM.zp,
+         0xB5, AM.zpx,
+         0xA1, AM.izx,
+         0xB1, AM.izy,
+         0xAD, AM.abs,
+         0xBD, AM.abx,
+         0xB9, AM.aby)
+
+# TODO sta
+
+opFamily("LDX",
+         0xA2, AM.imm,
+         0xA6, AM.zp,
+         0xB6, AM.zpy,
+         0xAE, AM.abs,
+         0xBE, AM.aby)
+
+# TODO stx, ldy, sty, tax, txa, tay, tya, tsx
+
+make_op("TXS", 0x9A, AM.imp)
+
+# TODO pla, pha, plp, php
+
+# Jump/flag commands
+
+# TODO bpl, bmi, bvc, bvs, bcc, bcs, bne, beq, brk, rti, jsr, rts,
+# jmp, bit, clc, sec
+
+make_op("CLD", 0xD8, AM.imp)
+
+# TODO sed, cli, sei, clv, nop
+
+# Illegal opcodes
+
+# TODO fuck it just make them ILLOP, at least for now
+
 make_op("SEI", 0x78, AM.imp)
