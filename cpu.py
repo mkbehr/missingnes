@@ -1,7 +1,54 @@
+FLAG_C = 0x1 # carry
+FLAG_Z = 0x2 # zero result
+FLAG_I = 0x4 # interrupt disable
+FLAG_D = 0x8 # decimal mode
+FLAG_B = 0x10 # break command
+FLAG_EXP = 0x20 # expansion
+FLAG_V = 0x40 # overflow
+FLAV_N = 0x80 # negative result
+
 class CPU(object):
 
-    def __init__(self, prgrom, chrrom): # TODO more
+    def __init__(self, prgrom, chrrom):
+        """Sets up an initial CPU state loading from the given ROM. Simulates
+        the reset signal."""
+        # see http://wiki.nesdev.com/w/index.php/CPU_power_up_state
+        # for some initial values
         self.prgrom = prgrom
         self.prgromsize = len(prgrom)
         self.chrrom = chrrom
         self.chrromsize = len(chrrom)
+
+        # registers
+        self.reg_A = 0
+        self.reg_X = 0
+        self.reg_Y = 0
+
+        # stack pointer
+        self.SP = 0xFD
+
+        # flags
+        self.flags = FLAG_I | FLAG_B | FLAG_EXP
+
+        # program counter: initialize to 0; later set according to the
+        # reset signal handler
+        self.PC = 0
+
+        # Now that everything is set up, simulate the RST signal.
+        # If we ever track frames, this will affect those.
+        self.PC = mem.dereference(mem.VEC_RST, c)
+
+    def flag(self, mask):
+        return self.flags & mask
+
+    def setFlag(self, mask, val): # val should be boolean
+        if val:
+            self.flags |= mask
+        else:
+            self.flags &= (0xFF ^ mask)
+
+    def tick(self):
+        # let's pretend the clock doesn't exist for now
+        instruction = opc.fromAddr(self.PC)
+        self.PC = instruction.nextaddr
+        instruction.call()

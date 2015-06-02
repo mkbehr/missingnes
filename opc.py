@@ -3,7 +3,7 @@ import struct
 
 AM = mem.AddrMode
 
-# Length of specifiers for address mode. Operation length is this + 1.
+# Length of specifiers for address mode. Instruction length is this + 1.
 ADDR_MODE_LENGTHS = {
     AM.imp : 0,
     AM.imm : 1,
@@ -34,7 +34,7 @@ class Opcode(object):
     def size(self):
         return 1 + self.addrSize
 
-class Operation(object):
+class Instruction(object):
     
     def __init__(self, addr, opcode, addrData):
         self.addr = addr
@@ -47,9 +47,12 @@ class Operation(object):
 
     @property
     def nextaddr(self):
-        """The address of the next operation (by listing; doesn't take
+        """The address of the next instruction (by listing; doesn't take
         jumps into account)."""
         return self.addr + self.size
+
+    def call(self):
+        raise NotImplementedError("Instruction.call: not implemented")
 
     def addrDataStr(self):
         # This probably could have been shorter. Oh well.
@@ -100,13 +103,13 @@ class Operation(object):
     def fromAddr(address, cpu):
         code = opcodeLookup(ord(mem.addr(address, cpu)))
         addrData = mem.addr(address+1, cpu, nbytes = code.addrSize)
-        return Operation(address, code, addrData)
+        return Instruction(address, code, addrData)
 
     @staticmethod
     def listFromAddr(address, nops, cpu):
         out = []
         while nops:
-            op = Operation.fromAddr(address, cpu)
+            op = Instruction.fromAddr(address, cpu)
             out.append(op)
             nops -= 1
             address += op.size
