@@ -1,7 +1,12 @@
 class NESRom(object):
     """An iNES format ROM file. (Does not support NES 2.0 features.)"""
 
-    def __init__(self, prgrom, chrrom): # TODO flags
+    def __init__(self, prgrom, chrrom):
+        # TODO flags
+        
+        # TODO: think about what format to store our ROMs in
+        # (currently they're bytestrings, which can be passed to
+        # struct but need to use ord to compare them otherwise)
         self.prg = prgrom
         self.chr = chrrom
 
