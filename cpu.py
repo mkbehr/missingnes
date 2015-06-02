@@ -59,8 +59,8 @@ class CPU(object):
         raise NotImplementedError()
 
     def printState(self):
-        print ("A = %08x X = %08x Y = %08x flags = %08x" %
-               (self.reg_A, self.reg_X, self.reg_Y, self.flags))
+        print ("A = %02x X = %02x Y = %02x flags = %02x PC = %04x" %
+               (self.reg_A, self.reg_X, self.reg_Y, self.flags, self.PC))
         instruction = opc.Instruction.fromAddr(self.PC, self)
         print instruction.disassemble()
 
