@@ -1,3 +1,4 @@
+import cpu as c
 import mem
 import struct
 
@@ -21,8 +22,9 @@ ADDR_MODE_LENGTHS = {
 
 class Opcode(object):
 
-    def __init__(self, name, code, addrMode): # TODO functions
+    def __init__(self, name, f, code, addrMode): # TODO functions
         self.name = name
+        self.f = f
         self.code = code
         self.addrMode = addrMode
 
@@ -51,8 +53,11 @@ class Instruction(object):
         jumps into account)."""
         return self.addr + self.size
 
-    def call(self):
-        raise NotImplementedError("Instruction.call: not implemented")
+    def readMem(self):
+        raise NotImplementedError()
+
+    def call(self, cpu):
+        self.opcode.f(self, cpu)
 
     def addrDataStr(self):
         # This probably could have been shorter. Oh well.
@@ -117,30 +122,40 @@ class Instruction(object):
 
 opcodes = {}
 
+def op_illop(instr, cpu):
+    raise RuntimeError("Illegal or unimplemented operation %s (%x) at %x" % (instr.opcode.name,
+                                                                             instr.opcode.code,
+                                                                             instr.addr))
 def opcodeLookup(code):
     if code in opcodes:
         return opcodes[code]
     else:
-        return Opcode("ILLOP", code, AM.imp)
+        return Opcode("ILLOP", op_illop, code, AM.imp)
 
-def make_op(name, code, addrMode):
+def make_op(name, f, code, addrMode):
     # some sanchecking seems worthwhile
     assert code not in opcodes
     assert code >= 0x00
     assert code <= 0xff
-    opcodes[code] = Opcode(name, code, addrMode)
+    opcodes[code] = Opcode(name, f, code, addrMode)
 
-def opFamily(name, *args):
+def opFamily(name, f, *args):
     if (len(args) % 2):
         raise RuntimeError("opFamily needs an even number of args")
     for i in range(len(args)/2):
-        make_op(name, args[2*i], args[(2*i)+1])    
+        make_op(name, f, args[2*i], args[(2*i)+1])    
 
 ## Begin opcode listing
 # see http://www.oxyron.de/html/opcodes02.html
 
 # Logical and arithmetic commands
-opFamily("ORA",
+def op_ora(instr, cpu):
+    memval = instr.readMem()
+    out = cpu.reg_A | memval
+    cpu.reg_A = out
+    cpu.setFlag(c.FLAG_Z, out == 0)
+    cpu.setFlag(c.FLAG_N, out < 0)
+opFamily("ORA", op_ora,
          0x09, AM.imm,
          0x05, AM.zp,
          0x15, AM.zpx,
@@ -149,7 +164,8 @@ opFamily("ORA",
          0x0D, AM.abs,
          0x1D, AM.abx,
          0x19, AM.aby)
-opFamily("AND",
+op_and = op_illop
+opFamily("AND", op_and,
          0x29, AM.imm,
          0x25, AM.zp,
          0x35, AM.zpx,
@@ -158,7 +174,8 @@ opFamily("AND",
          0x2D, AM.abs,
          0x3D, AM.abx,
          0x39, AM.aby)
-opFamily("EOR",
+op_eor = op_illop
+opFamily("EOR", op_eor,
          0x49, AM.imm,
          0x45, AM.zp,
          0x55, AM.zpx,
@@ -167,7 +184,8 @@ opFamily("EOR",
          0x4D, AM.abs,
          0x5D, AM.abx,
          0x59, AM.aby)
-opFamily("ADC",
+op_adc = op_illop
+opFamily("ADC", op_adc,
          0x69, AM.imm,
          0x65, AM.zp,
          0x75, AM.zpx,
@@ -176,7 +194,8 @@ opFamily("ADC",
          0x6D, AM.abs,
          0x7D, AM.abx,
          0x79, AM.aby)
-opFamily("SBC",
+op_sbc = op_illop
+opFamily("SBC", op_sbc,
          0xE9, AM.imm,
          0xE5, AM.zp,
          0xF5, AM.zpx,
@@ -185,7 +204,8 @@ opFamily("SBC",
          0xED, AM.abs,
          0xFD, AM.abx,
          0xF9, AM.aby)
-opFamily("CMP",
+op_cmp = op_illop
+opFamily("CMP", op_cmp,
          0xC9, AM.imm,
          0xC5, AM.zp,
          0xD5, AM.zpx,
@@ -194,47 +214,59 @@ opFamily("CMP",
          0xCD, AM.abs,
          0xDD, AM.abx,
          0xD9, AM.aby)
-opFamily("CPX",
+op_cpx = op_illop
+opFamily("CPX", op_cpx,
          0xE0, AM.imm,
          0xE4, AM.zp,
          0xEC, AM.abs)
-opFamily("CPY",
+op_cpy = op_illop
+opFamily("CPY", op_cpy,
          0xC0, AM.imm,
          0xC4, AM.zp,
          0xCC, AM.abs)
-opFamily("DEC",
+op_dec = op_illop
+opFamily("DEC", op_dec,
          0xC6, AM.zp,
          0xD6, AM.zpx,
          0xCE, AM.abs,
          0xDE, AM.abx)
-make_op("DEX", 0xCA, AM.imp)
-make_op("DEY", 0x88, AM.imp)
-opFamily("INC",
+op_dex = op_illop
+make_op("DEX", op_dex, 0xCA, AM.imp)
+op_dey = op_illop
+make_op("DEY", op_dey, 0x88, AM.imp)
+op_inc = op_illop
+opFamily("INC", op_inc,
          0xE6, AM.zp,
          0xF6, AM.zpx,
          0xEE, AM.abs,
          0xFE, AM.abx)
-make_op("INX", 0xE8, AM.imp)
-make_op("INY", 0xC8, AM.imp)
-opFamily("ASL",
+op_inx = op_illop
+make_op("INX", op_inx, 0xE8, AM.imp)
+op_iny = op_illop
+make_op("INY", op_iny, 0xC8, AM.imp)
+op_asl = op_illop
+opFamily("ASL", op_asl,
          0x0A, AM.imp,
          0x06, AM.zp,
          0x16, AM.zpx,
          0x0E, AM.abs,
          0x1E, AM.abx)
-opFamily("ROL",
+op_rol = op_illop
+opFamily("ROL", op_rol,
          0x2A, AM.imp,
          0x26, AM.zp,
          0x36, AM.zpx,
          0x2E, AM.abs,
          0x3E, AM.abx)
-opFamily("LSR",
+op_lsr = op_illop
+opFamily("LSR", op_lsr,
          0x4A, AM.imp,
          0x46, AM.zp,
          0x56, AM.zpx,
          0x4E, AM.abs,
          0x5E, AM.abx)
-opFamily("ROR",
+op_ror = op_illop
+opFamily("ROR", op_ror,
          0x6A, AM.imp,
          0x66, AM.zp,
          0x76, AM.zpx,
@@ -243,7 +275,8 @@ opFamily("ROR",
 
 # Move commands
 
-opFamily("LDA",
+op_lda = op_illop
+opFamily("LDA", op_lda,
          0xA9, AM.imm,
          0xA5, AM.zp,
          0xB5, AM.zpx,
@@ -252,7 +285,8 @@ opFamily("LDA",
          0xAD, AM.abs,
          0xBD, AM.abx,
          0xB9, AM.aby)
-opFamily("STA",
+op_sta = op_illop
+opFamily("STA", op_sta,
          0x85, AM.zp,
          0x95, AM.zpx,
          0x81, AM.izx,
@@ -260,64 +294,98 @@ opFamily("STA",
          0x8D, AM.abs,
          0x9D, AM.abx,
          0x99, AM.aby)
-opFamily("LDX",
+op_ldx = op_illop
+opFamily("LDX", op_ldx,
          0xA2, AM.imm,
          0xA6, AM.zp,
          0xB6, AM.zpy,
          0xAE, AM.abs,
          0xBE, AM.aby)
-opFamily("STX",
+op_stx = op_illop
+opFamily("STX", op_stx,
          0x86, AM.zp,
          0x96, AM.zpy,
          0x8E, AM.abs)
-opFamily("LDY",
+op_ldy = op_illop
+opFamily("LDY", op_ldy,
          0xA0, AM.imm,
          0xA4, AM.zp,
          0xB4, AM.zpx,
          0xAC, AM.abs,
          0xBC, AM.abx)
-opFamily("STY",
+op_sty = op_illop
+opFamily("STY", op_sty,
          0x84, AM.zp,
          0x94, AM.zpx,
          0x8C, AM.abs)
-make_op("TAX", 0xAA, AM.imp)
-make_op("TXA", 0x8A, AM.imp)
-make_op("TAY", 0xA8, AM.imp)
-make_op("TYA", 0x98, AM.imp)
-make_op("TSX", 0xBA, AM.imp)
-make_op("TXS", 0x9A, AM.imp)
-make_op("PLA", 0x68, AM.imp)
-make_op("PHA", 0x48, AM.imp)
-make_op("PLP", 0x28, AM.imp)
-make_op("PHP", 0x08, AM.imp)
+op_tax = op_illop
+make_op("TAX", op_tax, 0xAA, AM.imp)
+op_txa = op_illop
+make_op("TXA", op_txa, 0x8A, AM.imp)
+op_tay = op_illop
+make_op("TAY", op_tay, 0xA8, AM.imp)
+op_tya = op_illop
+make_op("TYA", op_tya, 0x98, AM.imp)
+op_tsx = op_illop
+make_op("TSX", op_tsx, 0xBA, AM.imp)
+op_txs = op_illop
+make_op("TXS", op_txs, 0x9A, AM.imp)
+op_pla = op_illop
+make_op("PLA", op_pla, 0x68, AM.imp)
+op_pha = op_illop
+make_op("PHA", op_pha, 0x48, AM.imp)
+op_plp = op_illop
+make_op("PLP", op_plp, 0x28, AM.imp)
+op_php = op_illop
+make_op("PHP", op_php, 0x08, AM.imp)
 
 # Jump/flag commands
 
-make_op("BPL", 0x10, AM.rel)
-make_op("BMI", 0x30, AM.rel)
-make_op("BVC", 0x50, AM.rel)
-make_op("BVS", 0x70, AM.rel)
-make_op("BCC", 0x90, AM.rel)
-make_op("BCS", 0xB0, AM.rel)
-make_op("BNE", 0xD0, AM.rel)
-make_op("BEQ", 0xF0, AM.rel)
-make_op("BRK", 0x00, AM.imp)
-make_op("RTI", 0x40, AM.imp)
-make_op("JSR", 0x20, AM.abs)
-make_op("RTS", 0x60, AM.imp)
-opFamily("JMP",
+op_bpl = op_illop
+make_op("BPL", op_bpl, 0x10, AM.rel)
+op_bmi = op_illop
+make_op("BMI", op_bmi, 0x30, AM.rel)
+op_bvc = op_illop
+make_op("BVC", op_bvc, 0x50, AM.rel)
+op_bvs = op_illop
+make_op("BVS", op_bvs, 0x70, AM.rel)
+op_bcc = op_illop
+make_op("BCC", op_bcc, 0x90, AM.rel)
+op_bcs = op_illop
+make_op("BCS", op_bcs, 0xB0, AM.rel)
+op_bne = op_illop
+make_op("BNE", op_bne, 0xD0, AM.rel)
+op_beq = op_illop
+make_op("BEQ", op_beq, 0xF0, AM.rel)
+op_brk = op_illop
+make_op("BRK", op_brk, 0x00, AM.imp)
+op_rti = op_illop
+make_op("RTI", op_rti, 0x40, AM.imp)
+op_jsr = op_illop
+make_op("JSR", op_jsr, 0x20, AM.abs)
+op_rts = op_illop
+make_op("RTS", op_rts, 0x60, AM.imp)
+op_jmp = op_illop
+opFamily("JMP", op_jmp,
          0x4C, AM.abs,
          0x6C, AM.ind)
-opFamily("BIT",
+op_bit = op_illop
+opFamily("BIT", op_bit,
          0x24, AM.zp,
          0x2C, AM.abs)
-make_op("CLC", 0x18, AM.imp)
-make_op("SEC", 0x38, AM.imp)
-make_op("CLD", 0xD8, AM.imp)
-make_op("SED", 0xF8, AM.imp)
-make_op("CLI", 0x58, AM.imp)
-make_op("SEI", 0x78, AM.imp)
-make_op("CLV", 0xB8, AM.imp)
-make_op("NOP", 0xEA, AM.imp)
-
-# Illegal opcodes
+op_clc = op_illop
+make_op("CLC", op_clc, 0x18, AM.imp)
+op_sec = op_illop
+make_op("SEC", op_sec, 0x38, AM.imp)
+op_cld = op_illop
+make_op("CLD", op_cld, 0xD8, AM.imp)
+op_sed = op_illop
+make_op("SED", op_sed, 0xF8, AM.imp)
+op_cli = op_illop
+make_op("CLI", op_cli, 0x58, AM.imp)
+op_sei = op_illop
+make_op("SEI", op_sei, 0x78, AM.imp)
+op_clv = op_illop
+make_op("CLV", op_clv, 0xB8, AM.imp)
+op_nop = op_illop
+make_op("NOP", op_nop, 0xEA, AM.imp)

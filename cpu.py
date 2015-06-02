@@ -1,3 +1,6 @@
+import mem
+import opc
+
 FLAG_C = 0x1 # carry
 FLAG_Z = 0x2 # zero result
 FLAG_I = 0x4 # interrupt disable
@@ -36,7 +39,7 @@ class CPU(object):
 
         # Now that everything is set up, simulate the RST signal.
         # If we ever track frames, this will affect those.
-        self.PC = mem.dereference(mem.VEC_RST, c)
+        self.PC = mem.dereference(mem.VEC_RST, self)
 
     def flag(self, mask):
         return self.flags & mask
@@ -49,6 +52,6 @@ class CPU(object):
 
     def tick(self):
         # let's pretend the clock doesn't exist for now
-        instruction = opc.fromAddr(self.PC)
+        instruction = opc.Instruction.fromAddr(self.PC, self)
         self.PC = instruction.nextaddr
-        instruction.call()
+        instruction.call(self)
