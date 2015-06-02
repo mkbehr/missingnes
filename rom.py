@@ -1,0 +1,66 @@
+class NESRom(object):
+    """An iNES format ROM file. (Does not support NES 2.0 features.)"""
+
+    def __init__(self, prgrom, chrrom): # TODO flags
+        self.prg = prgrom
+        self.chr = chrrom
+
+    @staticmethod
+    def fromByteString(bytes):
+        # See documentation at http://wiki.nesdev.com/w/index.php/INES
+
+        def fail(s):
+            raise RuntimeError(s)
+        def notimp(s):
+            raise NotImplementedError(s)
+
+        index = 0
+
+        # The first 16 bytes are the header.
+        header = bytes[0:16]
+
+        index += 16
+
+        if header[0:4] != "NES\x1A":
+            fail("Magic number failed")
+
+        prgromsize = ord(header[4]) * (2**14) # 16KB
+        print "PRG ROM size: %d" % prgromsize
+
+        chrromsize = ord(header[5]) * (2**13) # 8KB
+        if chrromsize:
+            print "CHR ROM size: %d" % chrromsize
+        else:
+            print "CHR RAM"
+
+        print "Flags 6 (unimplemented): %s" % format(ord(header[6]), '08b')
+        if ord(header[6]) & 2:
+            notimp("Can't read ROM file with trainer")
+        
+        print "Flags 7 (unimplemented): %s" % format(ord(header[7]), '08b')
+
+        prgram = ord(header[8])
+        if prgram == 0:
+            prgram = 1
+        print "PRG RAM size: %d * 8 KB" % prgram
+
+        print "Flags 9 (unimplemented): %s" % format(ord(header[9]), '08b')
+        print "Flags 10 (unimplemented): %s" % format(ord(header[10]), '08b')
+
+        for byte in header[11:]:
+            if ord(byte) != 0:
+                print "Warning: header not properly zero-filled"
+
+        prgrom = bytes[index:index+prgromsize]
+        index += prgromsize
+
+        chrrom = bytes[index:index+chrromsize]
+        index += chrromsize
+
+        print "unread bytes: %d" % (len(bytes) - index)
+
+        return NESRom(prgrom = prgrom, chrrom = chrrom)
+        
+def readRom(path):
+    with open(path, 'rb') as f:
+        return NESRom.fromByteString(f.read())
