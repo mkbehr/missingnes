@@ -37,8 +37,6 @@ class Opcode(object):
 class Operation(object):
     
     def __init__(self, addr, opcode, addrData):
-        # TODO address-mode-relevant information
-        # TODO should this store its own address?
         self.addr = addr
         self.opcode = opcode
         self.addrData = addrData
@@ -100,7 +98,7 @@ class Operation(object):
 
     @staticmethod
     def fromAddr(address, cpu):
-        code = opcodes[ord(mem.addr(address, cpu))]
+        code = opcodeLookup(ord(mem.addr(address, cpu)))
         addrData = mem.addr(address+1, cpu, nbytes = code.addrSize)
         return Operation(address, code, addrData)
 
@@ -116,7 +114,17 @@ class Operation(object):
 
 opcodes = {}
 
+def opcodeLookup(code):
+    if code in opcodes:
+        return opcodes[code]
+    else:
+        return Opcode("ILLOP", code, AM.imp)
+
 def make_op(name, code, addrMode):
+    # some sanchecking seems worthwhile
+    assert code not in opcodes
+    assert code >= 0x00
+    assert code <= 0xff
     opcodes[code] = Opcode(name, code, addrMode)
 
 def opFamily(name, *args):
@@ -138,8 +146,97 @@ opFamily("ORA",
          0x0D, AM.abs,
          0x1D, AM.abx,
          0x19, AM.aby)
-# TODO and, eor, adc, sbc, cmp, cpx, cpy, dec, dex, dey, inc, inx,
-# iny, asl, rol, lsr, ror
+opFamily("AND",
+         0x29, AM.imm,
+         0x25, AM.zp,
+         0x35, AM.zpx,
+         0x21, AM.izx,
+         0x31, AM.izy,
+         0x2D, AM.abs,
+         0x3D, AM.abx,
+         0x39, AM.aby)
+opFamily("EOR",
+         0x49, AM.imm,
+         0x45, AM.zp,
+         0x55, AM.zpx,
+         0x41, AM.izx,
+         0x51, AM.izy,
+         0x4D, AM.abs,
+         0x5D, AM.abx,
+         0x59, AM.aby)
+opFamily("ADC",
+         0x69, AM.imm,
+         0x65, AM.zp,
+         0x75, AM.zpx,
+         0x61, AM.izx,
+         0x71, AM.izy,
+         0x6D, AM.abs,
+         0x7D, AM.abx,
+         0x79, AM.aby)
+opFamily("SBC",
+         0xE9, AM.imm,
+         0xE5, AM.zp,
+         0xF5, AM.zpx,
+         0xE1, AM.izx,
+         0xF1, AM.izy,
+         0xED, AM.abs,
+         0xFD, AM.abx,
+         0xF9, AM.aby)
+opFamily("CMP",
+         0xC9, AM.imm,
+         0xC5, AM.zp,
+         0xD5, AM.zpx,
+         0xC1, AM.izx,
+         0xD1, AM.izy,
+         0xCD, AM.abs,
+         0xDD, AM.abx,
+         0xD9, AM.aby)
+opFamily("CPX",
+         0xE0, AM.imm,
+         0xE4, AM.zp,
+         0xEC, AM.abs)
+opFamily("CPY",
+         0xC0, AM.imm,
+         0xC4, AM.zp,
+         0xCC, AM.abs)
+opFamily("DEC",
+         0xC6, AM.zp,
+         0xD6, AM.zpx,
+         0xCE, AM.abs,
+         0xDE, AM.abx)
+make_op("DEX", 0xCA, AM.imp)
+make_op("DEY", 0x88, AM.imp)
+opFamily("INC",
+         0xE6, AM.zp,
+         0xF6, AM.zpx,
+         0xEE, AM.abs,
+         0xFE, AM.abx)
+make_op("INX", 0xE8, AM.imp)
+make_op("INY", 0xC8, AM.imp)
+opFamily("ASL",
+         0x0A, AM.imp,
+         0x06, AM.zp,
+         0x16, AM.zpx,
+         0x0E, AM.abs,
+         0x1E, AM.abx)
+opFamily("ROL",
+         0x2A, AM.imp,
+         0x26, AM.zp,
+         0x36, AM.zpx,
+         0x2E, AM.abs,
+         0x3E, AM.abx)
+opFamily("LSR",
+         0x4A, AM.imp,
+         0x46, AM.zp,
+         0x56, AM.zpx,
+         0x4E, AM.abs,
+         0x5E, AM.abx)
+opFamily("ROR",
+         0x6A, AM.imp,
+         0x66, AM.zp,
+         0x76, AM.zpx,
+         0x6E, AM.abs,
+         0x7E, AM.abx)
 
 # Move commands
 
@@ -166,12 +263,30 @@ opFamily("LDX",
          0xB6, AM.zpy,
          0xAE, AM.abs,
          0xBE, AM.aby)
-
-# TODO stx, ldy, sty, tax, txa, tay, tya, tsx
-
+opFamily("STX",
+         0x86, AM.zp,
+         0x96, AM.zpy,
+         0x8E, AM.abs)
+opFamily("LDY",
+         0xA0, AM.imm,
+         0xA4, AM.zp,
+         0xB4, AM.zpx,
+         0xAC, AM.abs,
+         0xBC, AM.abx)
+opFamily("STY",
+         0x84, AM.zp,
+         0x94, AM.zpx,
+         0x8C, AM.abs)
+make_op("TAX", 0xAA, AM.imp)
+make_op("TXA", 0x8A, AM.imp)
+make_op("TAY", 0xA8, AM.imp)
+make_op("TYA", 0x98, AM.imp)
+make_op("TSX", 0xBA, AM.imp)
 make_op("TXS", 0x9A, AM.imp)
-
-# TODO pla, pha, plp, php
+make_op("PLA", 0x68, AM.imp)
+make_op("PHA", 0x48, AM.imp)
+make_op("PLP", 0x28, AM.imp)
+make_op("PHP", 0x08, AM.imp)
 
 # Jump/flag commands
 
@@ -203,5 +318,3 @@ make_op("CLV", 0xB8, AM.imp)
 make_op("NOP", 0xEA, AM.imp)
 
 # Illegal opcodes
-
-# TODO fuck it just make them ILLOP, at least for now
