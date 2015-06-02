@@ -1,4 +1,5 @@
 import mem
+import struct
 
 AM = mem.AddrMode
 
@@ -35,9 +36,10 @@ class Opcode(object):
 
 class Operation(object):
     
-    def __init__(self, opcode, addrData):
+    def __init__(self, addr, opcode, addrData):
         # TODO address-mode-relevant information
         # TODO should this store its own address?
+        self.addr = addr
         self.opcode = opcode
         self.addrData = addrData
 
@@ -45,17 +47,62 @@ class Operation(object):
     def size(self):
         return self.opcode.size
 
-    def disassemble(self):
-        if self.size > 1: # do we have arguments?
-            return "%s %s" % (self.opcode.name, self.addrData)
+    @property
+    def nextaddr(self):
+        """The address of the next operation (by listing; doesn't take
+        jumps into account)."""
+        return self.addr + self.size
+
+    def addrDataStr(self):
+        # This probably could have been shorter. Oh well.
+        am = self.opcode.addrMode
+        if am == AM.imp:
+            return ""
+        elif am == AM.imm:
+            return "#$%02x" % ord(self.addrData)
+        elif am == AM.zp:
+            return "$%02x" % ord(self.addrData)
+        elif am == AM.zpx:
+            return "$%02x, X" % ord(self.addrData)
+        elif am == AM.zpy:
+            return "$%02x, Y" % ord(self.addrData)
+        elif am == AM.izx:
+            return "($%02x, X)" % ord(self.addrData)
+        elif am == AM.izy:
+            return "($%02x), Y" % ord(self.addrData)
+        # remember little-endian from here on
+        elif am == AM.abs:
+            return "$%02x%02x" % (ord(self.addrData[1]),
+                                  ord(self.addrData[0]))
+        elif am == AM.abx:
+            return "$%02x%02x, X" % (ord(self.addrData[1]),
+                                     ord(self.addrData[0]))
+        elif am == AM.aby:
+            return "$%02x%02x, Y" % (ord(self.addrData[1]),
+                                     ord(self.addrData[0]))
+        elif am == AM.ind:
+            return "($%02x%02x)" % (ord(self.addrData[1]),
+                                    ord(self.addrData[0]))
+        elif am == AM.rel:
+            # here addrData is a signed integer that represents an
+            # offest from the address we'll reach after the
+            # instruction, at least as far as I can tell
+            offset = struct.unpack('b', self.addrData)[0]
+            target = self.addr + offset # no endianness to worry about
+            return "$%04x" % target
         else:
-            return self.opcode.name
+            raise RuntimeError("Unrecognized addressing mode")
+
+    def disassemble(self): # TODO print hex data here too
+        return "%04x:    %s %s" % (self.addr,
+                                   self.opcode.name,
+                                   self.addrDataStr())
 
     @staticmethod
     def fromAddr(address, cpu):
         code = opcodes[ord(mem.addr(address, cpu))]
         addrData = mem.addr(address+1, cpu, nbytes = code.addrSize)
-        return Operation(code, addrData)
+        return Operation(address, code, addrData)
 
     @staticmethod
     def listFromAddr(address, nops, cpu):
@@ -105,9 +152,14 @@ opFamily("LDA",
          0xAD, AM.abs,
          0xBD, AM.abx,
          0xB9, AM.aby)
-
-# TODO sta
-
+opFamily("STA",
+         0x85, AM.zp,
+         0x95, AM.zpx,
+         0x81, AM.izx,
+         0x91, AM.izy,
+         0x8D, AM.abs,
+         0x9D, AM.abx,
+         0x99, AM.aby)
 opFamily("LDX",
          0xA2, AM.imm,
          0xA6, AM.zp,
@@ -123,15 +175,33 @@ make_op("TXS", 0x9A, AM.imp)
 
 # Jump/flag commands
 
-# TODO bpl, bmi, bvc, bvs, bcc, bcs, bne, beq, brk, rti, jsr, rts,
-# jmp, bit, clc, sec
-
+make_op("BPL", 0x10, AM.rel)
+make_op("BMI", 0x30, AM.rel)
+make_op("BVC", 0x50, AM.rel)
+make_op("BVS", 0x70, AM.rel)
+make_op("BCC", 0x90, AM.rel)
+make_op("BCS", 0xB0, AM.rel)
+make_op("BNE", 0xD0, AM.rel)
+make_op("BEQ", 0xF0, AM.rel)
+make_op("BRK", 0x00, AM.imp)
+make_op("RTI", 0x40, AM.imp)
+make_op("JSR", 0x20, AM.abs)
+make_op("RTS", 0x60, AM.imp)
+opFamily("JMP",
+         0x4C, AM.abs,
+         0x6C, AM.ind)
+opFamily("BIT",
+         0x24, AM.zp,
+         0x2C, AM.abs)
+make_op("CLC", 0x18, AM.imp)
+make_op("SEC", 0x38, AM.imp)
 make_op("CLD", 0xD8, AM.imp)
-
-# TODO sed, cli, sei, clv, nop
+make_op("SED", 0xF8, AM.imp)
+make_op("CLI", 0x58, AM.imp)
+make_op("SEI", 0x78, AM.imp)
+make_op("CLV", 0xB8, AM.imp)
+make_op("NOP", 0xEA, AM.imp)
 
 # Illegal opcodes
 
 # TODO fuck it just make them ILLOP, at least for now
-
-make_op("SEI", 0x78, AM.imp)
