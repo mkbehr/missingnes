@@ -53,7 +53,16 @@ class Instruction(object):
         jumps into account)."""
         return self.addr + self.size
 
+    def memAddr(self):
+        """Returns the memory address to be written to or read from. This will
+        depend on the addressing mode."""
+        # we convert endianness here
+        raise NotImplementedError()
+
     def readMem(self):
+        raise NotImplementedError()
+
+    def writeMem(self, val):
         raise NotImplementedError()
 
     def call(self, cpu):
@@ -361,31 +370,67 @@ op_brk = op_illop
 make_op("BRK", op_brk, 0x00, AM.imp)
 op_rti = op_illop
 make_op("RTI", op_rti, 0x40, AM.imp)
-op_jsr = op_illop
+
+def op_jsr(instr, cpu):
+    # Note: the spec says (PC + 1) -> PCL; (PC + 1) -> PCH.
+    #
+    # I'm not sure why it says that, but I'm going to assume that it
+    # does what I think it does. The same applies to JMP.
+    cpu.stackPush(instr.addr + 2) # last byte of the instruction, for RTS to read
+    cpu.PC = instr.memAddr()
 make_op("JSR", op_jsr, 0x20, AM.abs)
-op_rts = op_illop
+
+def op_rts(instr, cpu):
+    # Note: this is defined to pop the PC from the stack and add 1 to
+    # it. The stack is properly set up to do this by JSR.
+    oldpc = cpu.stackPop()
+    cpu.PC = oldpc + 1
 make_op("RTS", op_rts, 0x60, AM.imp)
-op_jmp = op_illop
+
+def op_jmp(instr, cpu):
+    cpu.PC = instr.memAddr()
 opFamily("JMP", op_jmp,
          0x4C, AM.abs,
          0x6C, AM.ind)
-op_bit = op_illop
+
+def op_bit(instr, cpu):
+    mem = instr.readMem()
+    # note that setFlag interprets its arg as a boolean
+    cpu.setFlag(c.FLAG_V, mem & 0x40)
+    cpu.setFlag(c.FLAG_N, mem & 0x80)
+    cpu.setFlag(c.FLAG_Z, not (mem & cpu.reg_A))
 opFamily("BIT", op_bit,
          0x24, AM.zp,
          0x2C, AM.abs)
-op_clc = op_illop
+
+def op_clc(instr, cpu):
+    cpu.setFlag(c.FLAG_C, False)
 make_op("CLC", op_clc, 0x18, AM.imp)
-op_sec = op_illop
+
+def op_sec(instr, cpu):
+    cpu.setFlag(c.FLAG_C, True)
 make_op("SEC", op_sec, 0x38, AM.imp)
-op_cld = op_illop
+
+def op_cld(instr, cpu):
+    cpu.setFlag(c.FLAG_D, False)
 make_op("CLD", op_cld, 0xD8, AM.imp)
-op_sed = op_illop
+
+def op_sed(instr, cpu):
+    cpu.setFlag(c.FLAG_D, True)
 make_op("SED", op_sed, 0xF8, AM.imp)
-op_cli = op_illop
+
+def op_cli(instr, cpu):
+    cpu.setFlag(c.FLAG_I, False)
 make_op("CLI", op_cli, 0x58, AM.imp)
-op_sei = op_illop
+
+def op_sei(instr, cpu):
+    cpu.setFlag(c.FLAG_I, True)
 make_op("SEI", op_sei, 0x78, AM.imp)
-op_clv = op_illop
+
+def op_clv(instr, cpu):
+    cpu.setFlag(c.FLAG_V, False)
 make_op("CLV", op_clv, 0xB8, AM.imp)
-op_nop = op_illop
+
+def op_nop(instr, cpu):
+    pass
 make_op("NOP", op_nop, 0xEA, AM.imp)
