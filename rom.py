@@ -7,8 +7,8 @@ class NESRom(object):
         # TODO: think about what format to store our ROMs in
         # (currently they're bytestrings, which can be passed to
         # struct but need to use ord to compare them otherwise)
-        self.prg = prgrom
-        self.chr = chrrom
+        self.prgrom = prgrom
+        self.chrrom = chrrom
 
     @staticmethod
     def fromByteString(bytes):
