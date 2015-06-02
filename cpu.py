@@ -8,7 +8,7 @@ FLAG_D = 0x8 # decimal mode
 FLAG_B = 0x10 # break command
 FLAG_EXP = 0x20 # expansion
 FLAG_V = 0x40 # overflow
-FLAV_N = 0x80 # negative result
+FLAG_N = 0x80 # negative result
 
 class CPU(object):
 
@@ -50,6 +50,9 @@ class CPU(object):
         else:
             self.flags &= (0xFF ^ mask)
 
+    def mathFlags(self, val):
+        self.setFlag(FLAG_Z, val == 0)
+        self.setFlag(FLAG_N, val < 0)
 
     # do stack pushing and popping actually want to live in the CPU?
     def stackPush(self, val):

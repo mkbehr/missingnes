@@ -64,7 +64,7 @@ class Instruction(object):
             warn("Trying to access memory for implicit-addressing instruction")
             return None
         elif am == AM.imm:
-            raise NotImplementedError()
+            return self.addr + 1
         elif am == AM.zp:
             raise NotImplementedError()
 
@@ -102,10 +102,10 @@ class Instruction(object):
         else:
             raise RuntimeError("Unrecognized addressing mode")
 
-    def readMem(self):
-        raise NotImplementedError()
+    def readMem(self, cpu):
+        return mem.addr(self.memAddr(), cpu)
 
-    def writeMem(self, val):
+    def writeMem(self, val, cpu):
         raise NotImplementedError()
 
     def call(self, cpu):
@@ -202,11 +202,10 @@ def opFamily(name, f, *args):
 
 # Logical and arithmetic commands
 def op_ora(instr, cpu):
-    memval = instr.readMem()
+    memval = instr.readMem(cpu)
     out = cpu.reg_A | memval
     cpu.reg_A = out
-    cpu.setFlag(c.FLAG_Z, out == 0)
-    cpu.setFlag(c.FLAG_N, out < 0)
+    cpu.mathFlags(out)
 opFamily("ORA", op_ora,
          0x09, AM.imm,
          0x05, AM.zp,
@@ -327,7 +326,10 @@ opFamily("ROR", op_ror,
 
 # Move commands
 
-op_lda = op_illop
+def op_lda(instr, cpu):
+    val = ord(instr.readMem(cpu))
+    cpu.reg_A = val
+    cpu.mathFlags(val)
 opFamily("LDA", op_lda,
          0xA9, AM.imm,
          0xA5, AM.zp,
@@ -346,25 +348,35 @@ opFamily("STA", op_sta,
          0x8D, AM.abs,
          0x9D, AM.abx,
          0x99, AM.aby)
-op_ldx = op_illop
+
+def op_ldx(instr, cpu):
+    val = ord(instr.readMem(cpu))
+    cpu.reg_X = val
+    cpu.mathFlags(val)
 opFamily("LDX", op_ldx,
          0xA2, AM.imm,
          0xA6, AM.zp,
          0xB6, AM.zpy,
          0xAE, AM.abs,
          0xBE, AM.aby)
+
 op_stx = op_illop
 opFamily("STX", op_stx,
          0x86, AM.zp,
          0x96, AM.zpy,
          0x8E, AM.abs)
-op_ldy = op_illop
+
+def op_ldy(instr, cpu):
+    val = ord(instr.readMem(cpu))
+    cpu.reg_Y = val
+    cpu.mathFlags(val)
 opFamily("LDY", op_ldy,
          0xA0, AM.imm,
          0xA4, AM.zp,
          0xB4, AM.zpx,
          0xAC, AM.abs,
          0xBC, AM.abx)
+
 op_sty = op_illop
 opFamily("STY", op_sty,
          0x84, AM.zp,
@@ -437,7 +449,7 @@ opFamily("JMP", op_jmp,
          0x6C, AM.ind)
 
 def op_bit(instr, cpu):
-    mem = instr.readMem()
+    mem = instr.readMem(cpu)
     # note that setFlag interprets its arg as a boolean
     cpu.setFlag(c.FLAG_V, mem & 0x40)
     cpu.setFlag(c.FLAG_N, mem & 0x80)
