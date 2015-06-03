@@ -21,6 +21,7 @@ class CPU(object):
         self.prgromsize = len(prgrom)
         self.chrrom = chrrom
         self.chrromsize = len(chrrom)
+        self.mem = mem.Memory(self)
 
         # registers
         self.reg_A = 0
@@ -39,7 +40,7 @@ class CPU(object):
 
         # Now that everything is set up, simulate the RST signal.
         # If we ever track frames, this will affect those.
-        self.PC = mem.dereference(mem.VEC_RST, self)
+        self.PC = self.mem.dereference(mem.VEC_RST)
 
     def flag(self, mask):
         return self.flags & mask

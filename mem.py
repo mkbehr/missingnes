@@ -11,25 +11,45 @@ VEC_NMI = 0xFFFA
 VEC_RST = 0xFFFC
 VEC_IRQ = 0xFFFE
 
-# TODO organize this functionality reasonably
-def addr(address, cpu, nbytes=1):
-    if address >= 0x8000:
-        if cpu.prgromsize > 0x4000:
-            raise NotImplementedError("PRG ROM mapping not implemented")
-        # TODO put together a proper mapping:
-        # see http://wiki.nesdev.com/w/index.php/MMC1
-        # and http://wiki.nesdev.com/w/index.php/UxROM
-        prgaddr = address - 0x8000
-        if prgaddr >= 0x4000:
-            prgaddr -= 0x4000
-        return cpu.prgrom[prgaddr:prgaddr+nbytes]
-    else:
-        raise NotImplementedError("Can only access PRG ROM")
+RAM_SIZE = 0x0800
+
+class Memory(object):
+
+    def __init__(self, cpu):
+        # ignoring some special bytes. see:
+        # http://wiki.nesdev.com/w/index.php/CPU_power_up_state
+        self.cpu = cpu
+        self.ram = ['\xff'] * RAM_SIZE
+
+
+    def read(self, address, nbytes=1):
+        if 0x0 <= address < 0x2000:
+            # Internal RAM from $0000 to $07FF; higher addresses here are mirrored
+            return self.ram[address % 0x0800]
+        elif 0x2000 <= address < 0x4000:
+            register = (address - 0x2000) % 8
+            raise NotImplementedError("Can't access PPU register %d at 0x%04x: no PPU" %
+                                      (register, address))
+        elif 0x4000 < address <= 0x4020:
+            raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
+                                      address)
+        elif 0x4020 <= address <= 0xffff:
+            if self.cpu.prgromsize > 0x4000:
+                raise NotImplementedError("PRG ROM mapping not implemented")
+            # TODO put together a proper mapping:
+            # see http://wiki.nesdev.com/w/index.php/MMC1
+            # and http://wiki.nesdev.com/w/index.php/UxROM
+            prgaddr = address - 0x8000
+            if prgaddr >= 0x4000:
+                prgaddr -= 0x4000
+            return self.cpu.prgrom[prgaddr:prgaddr+nbytes]
+        else:
+            raise RuntimeError("Address out of range: %x" % address)
     
-def dereference(paddr, cpu):
-    """Dereference a 16-bit pointer."""
-    pointer = addr(paddr, cpu, nbytes=2)
-    return struct.unpack("<H", pointer)[0]
+    def dereference(self, paddr): # utility function
+        """Dereference a 16-bit pointer."""
+        pointer = self.read(paddr, nbytes=2)
+        return struct.unpack("<H", pointer)[0]
 
 class AddrMode(Enum):
     imp = 1 # implicit

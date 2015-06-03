@@ -103,7 +103,7 @@ class Instruction(object):
             raise RuntimeError("Unrecognized addressing mode")
 
     def readMem(self, cpu):
-        return mem.addr(self.memAddr(), cpu)
+        return cpu.mem.read(self.memAddr())
 
     def writeMem(self, val, cpu):
         raise NotImplementedError()
@@ -158,8 +158,8 @@ class Instruction(object):
 
     @staticmethod
     def fromAddr(address, cpu):
-        code = opcodeLookup(ord(mem.addr(address, cpu)))
-        addrData = mem.addr(address+1, cpu, nbytes = code.addrSize)
+        code = opcodeLookup(ord(cpu.mem.read(address)))
+        addrData = cpu.mem.read(address+1, nbytes = code.addrSize)
         return Instruction(address, code, addrData)
 
     @staticmethod

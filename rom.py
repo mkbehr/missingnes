@@ -44,6 +44,11 @@ class NESRom(object):
         
         print "Flags 7 (unimplemented): %s" % format(ord(header[7]), '08b')
 
+        mapper = ((ord(header[6]) & 0xf0) / 0x10) + (ord(header[7]) & 0xf0)
+        print "Mapper: %d" % mapper
+        if mapper != 0:
+            notimp("Can't handle nonzero mappers")
+
         prgram = ord(header[8])
         if prgram == 0:
             prgram = 1
