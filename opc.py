@@ -489,8 +489,8 @@ make_op("JSR", op_jsr, 0x20, AM.abs)
 def op_rts(instr, cpu):
     # Note: this is defined to pop the PC from the stack and add 1 to
     # it. The stack is properly set up to do this by JSR.
-    pcLow = cpu.stackPop()
-    pcHigh = cpu.stackPop()
+    pcLow = ord(cpu.stackPop())
+    pcHigh = ord(cpu.stackPop())
     oldpc = pcLow + (pcHigh << 8)
     cpu.PC = oldpc + 1
 make_op("RTS", op_rts, 0x60, AM.imp)
