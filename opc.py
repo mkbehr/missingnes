@@ -485,7 +485,7 @@ opFamily("JMP", op_jmp,
          0x6C, AM.ind)
 
 def op_bit(instr, cpu):
-    mem = instr.readMem(cpu)
+    mem = ord(instr.readMem(cpu))
     # note that setFlag interprets its arg as a boolean
     cpu.setFlag(c.FLAG_V, mem & 0x40)
     cpu.setFlag(c.FLAG_N, mem & 0x80)
