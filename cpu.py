@@ -57,10 +57,15 @@ class CPU(object):
 
     # do stack pushing and popping actually want to live in the CPU?
     def stackPush(self, val):
-        raise NotImplementedError()
+        # TODO make sure the stack pointer stays in a sane range. Some
+        # sort of consistency check? Properties that can only have
+        # limited values assigned to them?
+        self.mem.write(self.SP, val)
+        self.SP -= 1
 
     def stackPop(self):
-        raise NotImplementedError()
+        self.SP += 1
+        return self.mem.read(self.SP)
 
     def printState(self):
         print ("A = %02x X = %02x Y = %02x flags = %02x PC = %04x" %

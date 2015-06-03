@@ -431,18 +431,26 @@ op_rti = op_illop # TODO
 make_op("RTI", op_rti, 0x40, AM.imp)
 
 def op_jsr(instr, cpu):
-    # Note: the spec says (PC + 1) -> PCL; (PC + 1) -> PCH.
-    #
-    # I'm not sure why it says that, but I'm going to assume that it
-    # does what I think it does. The same applies to JMP.
-    cpu.stackPush(instr.addr + 2) # last byte of the instruction, for RTS to read
+    # Note: the spec says (PC + 1) -> PCL; (PC + 1) -> PCH, but it
+    # looks like that's a typo. In section 8.1 it says (PC + 1) ->
+    # PCL; (PC + 2) -> PCH, which makes more sense.
+
+    # Note that PC is two bytes wide, so we push the high byte and
+    # then the low byte.
+    toPush = instr.addr + 2
+    toPushHigh = toPush >> 8
+    toPushLow = toPush & 0xff
+    cpu.stackPush(toPushHigh)
+    cpu.stackPush(toPushLow)
     cpu.PC = instr.memAddr()
 make_op("JSR", op_jsr, 0x20, AM.abs)
 
 def op_rts(instr, cpu):
     # Note: this is defined to pop the PC from the stack and add 1 to
     # it. The stack is properly set up to do this by JSR.
-    oldpc = cpu.stackPop()
+    pcLow = cpu.stackPop()
+    pcHigh = cpu.stackPop()
+    oldpc = pcLow + (pcHigh << 8)
     cpu.PC = oldpc + 1
 make_op("RTS", op_rts, 0x60, AM.imp)
 
