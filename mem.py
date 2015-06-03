@@ -28,7 +28,7 @@ class Memory(object):
             return self.ram[address % 0x0800]
         elif 0x2000 <= address < 0x4000:
             register = (address - 0x2000) % 8
-            raise NotImplementedError("Can't access PPU register %d at 0x%04x: no PPU" %
+            raise NotImplementedError("Can't read PPU register %d at 0x%04x: no PPU" %
                                       (register, address))
         elif 0x4000 < address <= 0x4020:
             raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
@@ -43,6 +43,27 @@ class Memory(object):
             if prgaddr >= 0x4000:
                 prgaddr -= 0x4000
             return self.cpu.prgrom[prgaddr:prgaddr+nbytes]
+        else:
+            raise RuntimeError("Address out of range: %x" % address)
+
+    def write(self, address, val):
+        if isinstance(val, int): # someday we will want to get rid of this chr/ord weirdness
+            val = chr(val)
+        # Lot of copy-pasting between here and read. Not sure how to
+        # fix it without like a page table, which is probably more
+        # effort than it's worth
+        if 0x0 <= address < 0x2000:
+            # Internal RAM from $0000 to $07FF; higher addresses here are mirrored
+            self.ram[address % 0x0800] = val
+        elif 0x2000 <= address < 0x4000:
+            register = (address - 0x2000) % 8
+            raise NotImplementedError("Can't write PPU register %d at 0x%04x: no PPU" %
+                                      (register, address))
+        elif 0x4000 < address <= 0x4020:
+            raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
+                                      address)
+        elif 0x4020 <= address <= 0xffff:
+            raise RuntimeError("Tried to write to ROM address %x" % address)
         else:
             raise RuntimeError("Address out of range: %x" % address)
     

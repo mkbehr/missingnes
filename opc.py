@@ -66,8 +66,7 @@ class Instruction(object):
         elif am == AM.imm:
             return self.addr + 1
         elif am == AM.zp:
-            raise NotImplementedError()
-
+            return ord(self.addrData) # address high byte is zero (hence "zero page")
         elif am == AM.zpx:
             raise NotImplementedError()
 
@@ -106,7 +105,7 @@ class Instruction(object):
         return cpu.mem.read(self.memAddr())
 
     def writeMem(self, val, cpu):
-        raise NotImplementedError()
+        cpu.mem.write(self.memAddr(), val)
 
     def call(self, cpu):
         self.opcode.f(self, cpu)
@@ -215,7 +214,7 @@ opFamily("ORA", op_ora,
          0x0D, AM.abs,
          0x1D, AM.abx,
          0x19, AM.aby)
-op_and = op_illop
+op_and = op_illop # TODO
 opFamily("AND", op_and,
          0x29, AM.imm,
          0x25, AM.zp,
@@ -225,7 +224,7 @@ opFamily("AND", op_and,
          0x2D, AM.abs,
          0x3D, AM.abx,
          0x39, AM.aby)
-op_eor = op_illop
+op_eor = op_illop # TODO
 opFamily("EOR", op_eor,
          0x49, AM.imm,
          0x45, AM.zp,
@@ -235,7 +234,7 @@ opFamily("EOR", op_eor,
          0x4D, AM.abs,
          0x5D, AM.abx,
          0x59, AM.aby)
-op_adc = op_illop
+op_adc = op_illop # TODO
 opFamily("ADC", op_adc,
          0x69, AM.imm,
          0x65, AM.zp,
@@ -245,7 +244,7 @@ opFamily("ADC", op_adc,
          0x6D, AM.abs,
          0x7D, AM.abx,
          0x79, AM.aby)
-op_sbc = op_illop
+op_sbc = op_illop # TODO
 opFamily("SBC", op_sbc,
          0xE9, AM.imm,
          0xE5, AM.zp,
@@ -255,7 +254,7 @@ opFamily("SBC", op_sbc,
          0xED, AM.abs,
          0xFD, AM.abx,
          0xF9, AM.aby)
-op_cmp = op_illop
+op_cmp = op_illop # TODO
 opFamily("CMP", op_cmp,
          0xC9, AM.imm,
          0xC5, AM.zp,
@@ -265,58 +264,58 @@ opFamily("CMP", op_cmp,
          0xCD, AM.abs,
          0xDD, AM.abx,
          0xD9, AM.aby)
-op_cpx = op_illop
+op_cpx = op_illop # TODO
 opFamily("CPX", op_cpx,
          0xE0, AM.imm,
          0xE4, AM.zp,
          0xEC, AM.abs)
-op_cpy = op_illop
+op_cpy = op_illop # TODO
 opFamily("CPY", op_cpy,
          0xC0, AM.imm,
          0xC4, AM.zp,
          0xCC, AM.abs)
-op_dec = op_illop
+op_dec = op_illop # TODO
 opFamily("DEC", op_dec,
          0xC6, AM.zp,
          0xD6, AM.zpx,
          0xCE, AM.abs,
          0xDE, AM.abx)
-op_dex = op_illop
+op_dex = op_illop # TODO
 make_op("DEX", op_dex, 0xCA, AM.imp)
-op_dey = op_illop
+op_dey = op_illop # TODO
 make_op("DEY", op_dey, 0x88, AM.imp)
-op_inc = op_illop
+op_inc = op_illop # TODO
 opFamily("INC", op_inc,
          0xE6, AM.zp,
          0xF6, AM.zpx,
          0xEE, AM.abs,
          0xFE, AM.abx)
-op_inx = op_illop
+op_inx = op_illop # TODO
 make_op("INX", op_inx, 0xE8, AM.imp)
-op_iny = op_illop
+op_iny = op_illop # TODO
 make_op("INY", op_iny, 0xC8, AM.imp)
-op_asl = op_illop
+op_asl = op_illop # TODO
 opFamily("ASL", op_asl,
          0x0A, AM.imp,
          0x06, AM.zp,
          0x16, AM.zpx,
          0x0E, AM.abs,
          0x1E, AM.abx)
-op_rol = op_illop
+op_rol = op_illop # TODO
 opFamily("ROL", op_rol,
          0x2A, AM.imp,
          0x26, AM.zp,
          0x36, AM.zpx,
          0x2E, AM.abs,
          0x3E, AM.abx)
-op_lsr = op_illop
+op_lsr = op_illop # TODO
 opFamily("LSR", op_lsr,
          0x4A, AM.imp,
          0x46, AM.zp,
          0x56, AM.zpx,
          0x4E, AM.abs,
          0x5E, AM.abx)
-op_ror = op_illop
+op_ror = op_illop # TODO
 opFamily("ROR", op_ror,
          0x6A, AM.imp,
          0x66, AM.zp,
@@ -339,7 +338,9 @@ opFamily("LDA", op_lda,
          0xAD, AM.abs,
          0xBD, AM.abx,
          0xB9, AM.aby)
-op_sta = op_illop
+
+def op_sta(instr, cpu):
+    instr.writeMem(cpu.reg_A, cpu)
 opFamily("STA", op_sta,
          0x85, AM.zp,
          0x95, AM.zpx,
@@ -360,7 +361,8 @@ opFamily("LDX", op_ldx,
          0xAE, AM.abs,
          0xBE, AM.aby)
 
-op_stx = op_illop
+def op_stx(instr, cpu):
+    instr.writeMem(cpu.reg_X, cpu)
 opFamily("STX", op_stx,
          0x86, AM.zp,
          0x96, AM.zpy,
@@ -377,53 +379,55 @@ opFamily("LDY", op_ldy,
          0xAC, AM.abs,
          0xBC, AM.abx)
 
-op_sty = op_illop
+def op_sty(instr, cpu):
+    instr.writeMem(cpu.reg_Y, cpu)
 opFamily("STY", op_sty,
          0x84, AM.zp,
          0x94, AM.zpx,
          0x8C, AM.abs)
-op_tax = op_illop
+
+op_tax = op_illop # TODO
 make_op("TAX", op_tax, 0xAA, AM.imp)
-op_txa = op_illop
+op_txa = op_illop # TODO
 make_op("TXA", op_txa, 0x8A, AM.imp)
-op_tay = op_illop
+op_tay = op_illop # TODO
 make_op("TAY", op_tay, 0xA8, AM.imp)
-op_tya = op_illop
+op_tya = op_illop # TODO
 make_op("TYA", op_tya, 0x98, AM.imp)
-op_tsx = op_illop
+op_tsx = op_illop # TODO
 make_op("TSX", op_tsx, 0xBA, AM.imp)
-op_txs = op_illop
+op_txs = op_illop # TODO
 make_op("TXS", op_txs, 0x9A, AM.imp)
-op_pla = op_illop
+op_pla = op_illop # TODO
 make_op("PLA", op_pla, 0x68, AM.imp)
-op_pha = op_illop
+op_pha = op_illop # TODO
 make_op("PHA", op_pha, 0x48, AM.imp)
-op_plp = op_illop
+op_plp = op_illop # TODO
 make_op("PLP", op_plp, 0x28, AM.imp)
-op_php = op_illop
+op_php = op_illop # TODO
 make_op("PHP", op_php, 0x08, AM.imp)
 
 # Jump/flag commands
 
-op_bpl = op_illop
+op_bpl = op_illop # TODO
 make_op("BPL", op_bpl, 0x10, AM.rel)
-op_bmi = op_illop
+op_bmi = op_illop # TODO
 make_op("BMI", op_bmi, 0x30, AM.rel)
-op_bvc = op_illop
+op_bvc = op_illop # TODO
 make_op("BVC", op_bvc, 0x50, AM.rel)
-op_bvs = op_illop
+op_bvs = op_illop # TODO
 make_op("BVS", op_bvs, 0x70, AM.rel)
-op_bcc = op_illop
+op_bcc = op_illop # TODO
 make_op("BCC", op_bcc, 0x90, AM.rel)
-op_bcs = op_illop
+op_bcs = op_illop # TODO
 make_op("BCS", op_bcs, 0xB0, AM.rel)
-op_bne = op_illop
+op_bne = op_illop # TODO
 make_op("BNE", op_bne, 0xD0, AM.rel)
-op_beq = op_illop
+op_beq = op_illop # TODO
 make_op("BEQ", op_beq, 0xF0, AM.rel)
-op_brk = op_illop
+op_brk = op_illop # TODO
 make_op("BRK", op_brk, 0x00, AM.imp)
-op_rti = op_illop
+op_rti = op_illop # TODO
 make_op("RTI", op_rti, 0x40, AM.imp)
 
 def op_jsr(instr, cpu):
