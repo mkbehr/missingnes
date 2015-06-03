@@ -24,7 +24,7 @@ ADDR_MODE_LENGTHS = {
 
 class Opcode(object):
 
-    def __init__(self, name, f, code, addrMode): # TODO functions
+    def __init__(self, name, f, code, addrMode):
         self.name = name
         self.f = f
         self.code = code
@@ -201,7 +201,7 @@ def opFamily(name, f, *args):
 
 # Logical and arithmetic commands
 def op_ora(instr, cpu):
-    memval = instr.readMem(cpu)
+    memval = ord(instr.readMem(cpu))
     out = cpu.reg_A | memval
     cpu.reg_A = out
     cpu.mathFlags(out)
@@ -214,7 +214,12 @@ opFamily("ORA", op_ora,
          0x0D, AM.abs,
          0x1D, AM.abx,
          0x19, AM.aby)
-op_and = op_illop # TODO
+
+def op_and(instr, cpu):
+    memval = ord(instr.readMem(cpu))
+    out = cpu.reg_A & memval
+    cpu.reg_A = out
+    cpu.mathFlags(out)
 opFamily("AND", op_and,
          0x29, AM.imm,
          0x25, AM.zp,
@@ -224,7 +229,12 @@ opFamily("AND", op_and,
          0x2D, AM.abs,
          0x3D, AM.abx,
          0x39, AM.aby)
-op_eor = op_illop # TODO
+
+def op_eor(instr, cpu):
+    memval = ord(instr.readMem(cpu))
+    out = cpu.reg_A ^ memval
+    cpu.reg_A = out
+    cpu.mathFlags(out)
 opFamily("EOR", op_eor,
          0x49, AM.imm,
          0x45, AM.zp,
@@ -234,7 +244,14 @@ opFamily("EOR", op_eor,
          0x4D, AM.abs,
          0x5D, AM.abx,
          0x59, AM.aby)
+
 op_adc = op_illop # TODO
+#
+# we'll need to figure out how signedness works, and also decimal mode
+# (though looking at section 2.2.1 of the manual, maybe we don't need
+# to worry about signedness after all? I'm confused. okay yeah it's
+# fine, see section 2.2.1.1. But we still have to deal with decimal
+# mode?)
 opFamily("ADC", op_adc,
          0x69, AM.imm,
          0x65, AM.zp,
