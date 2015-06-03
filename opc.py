@@ -409,22 +409,46 @@ make_op("PHP", op_php, 0x08, AM.imp)
 
 # Jump/flag commands
 
-op_bpl = op_illop # TODO
+def op_bpl(instr, cpu):
+    if not cpu.flag(c.FLAG_N):
+        cpu.PC = instr.memAddr()
 make_op("BPL", op_bpl, 0x10, AM.rel)
-op_bmi = op_illop # TODO
+
+def op_bmi(instr, cpu):
+    if cpu.flag(c.FLAG_N):
+        cpu.PC = instr.memAddr()
 make_op("BMI", op_bmi, 0x30, AM.rel)
-op_bvc = op_illop # TODO
+
+def op_bvc(instr, cpu):
+    if not cpu.flag(c.FLAG_V):
+        cpu.PC = instr.memAddr()
 make_op("BVC", op_bvc, 0x50, AM.rel)
-op_bvs = op_illop # TODO
+
+def op_bvs(instr, cpu):
+    if cpu.flag(c.FLAG_V):
+        cpu.PC = instr.memAddr()
 make_op("BVS", op_bvs, 0x70, AM.rel)
-op_bcc = op_illop # TODO
+
+def op_bcc(instr, cpu):
+    if not cpu.flag(c.FLAG_C):
+        cpu.PC = instr.memAddr()
 make_op("BCC", op_bcc, 0x90, AM.rel)
-op_bcs = op_illop # TODO
+
+def op_bcs(instr, cpu):
+    if cpu.flag(c.FLAG_C):
+        cpu.PC = instr.memAddr()
 make_op("BCS", op_bcs, 0xB0, AM.rel)
-op_bne = op_illop # TODO
+
+def op_bne(instr, cpu):
+    if not cpu.flag(c.FLAG_Z):
+        cpu.PC = instr.memAddr()
 make_op("BNE", op_bne, 0xD0, AM.rel)
-op_beq = op_illop # TODO
+
+def op_beq(instr, cpu):
+    if cpu.flag(c.FLAG_Z):
+        cpu.PC = instr.memAddr()
 make_op("BEQ", op_beq, 0xF0, AM.rel)
+
 op_brk = op_illop # TODO
 make_op("BRK", op_brk, 0x00, AM.imp)
 op_rti = op_illop # TODO
