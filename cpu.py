@@ -53,7 +53,8 @@ class CPU(object):
 
     def mathFlags(self, val):
         self.setFlag(FLAG_Z, val == 0)
-        self.setFlag(FLAG_N, val < 0)
+        # FLAG_N is set to match bit 7 of the value
+        self.setFlag(FLAG_N, val & 0x80)
 
     # do stack pushing and popping actually want to live in the CPU?
     def stackPush(self, val):
