@@ -403,25 +403,51 @@ opFamily("STY", op_sty,
          0x94, AM.zpx,
          0x8C, AM.abs)
 
-op_tax = op_illop # TODO
+def op_tax(instr, cpu):
+    cpu.reg_X = cpu.reg_A
+    cpu.mathFlags(cpu.reg_X)
 make_op("TAX", op_tax, 0xAA, AM.imp)
-op_txa = op_illop # TODO
+
+def op_txa(instr, cpu):
+    cpu.reg_A = cpu.reg_X
+    cpu.mathFlags(cpu.reg_A)
 make_op("TXA", op_txa, 0x8A, AM.imp)
-op_tay = op_illop # TODO
+
+def op_tay(instr, cpu):
+    cpu.reg_Y = cpu.reg_A
+    cpu.mathFlags(cpu.reg_Y)
 make_op("TAY", op_tay, 0xA8, AM.imp)
-op_tya = op_illop # TODO
+
+def op_tya(instr, cpu):
+    cpu.reg_A = cpu.reg_Y
+    cpu.mathFlags(cpu.reg_A)
 make_op("TYA", op_tya, 0x98, AM.imp)
-op_tsx = op_illop # TODO
+
+def op_tsx(instr, cpu):
+    cpu.reg_X = cpu.reg_S
+    cpu.mathFlags(cpu.reg_X)
 make_op("TSX", op_tsx, 0xBA, AM.imp)
-op_txs = op_illop # TODO
+
+def op_txs(instr, cpu):
+    cpu.reg_S = cpu.reg_X
+    cpu.mathFlags(cpu.reg_S)
 make_op("TXS", op_txs, 0x9A, AM.imp)
-op_pla = op_illop # TODO
+
+def op_pla(instr, cpu):
+    cpu.reg_A = ord(cpu.stackPop())
+    cpu.mathFlags(cpu.reg_A)
 make_op("PLA", op_pla, 0x68, AM.imp)
-op_pha = op_illop # TODO
+
+def op_pla(instr, cpu):
+    cpu.stackPush(cpu.reg_A)
 make_op("PHA", op_pha, 0x48, AM.imp)
-op_plp = op_illop # TODO
+
+def op_plp(instr, cpu):
+    cpu.flags = ord(cpu.stackPop())
 make_op("PLP", op_plp, 0x28, AM.imp)
-op_php = op_illop # TODO
+
+def op_php(instr, cpu):
+    cpu.stackPush(cpu.flags)
 make_op("PHP", op_php, 0x08, AM.imp)
 
 # Jump/flag commands
