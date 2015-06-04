@@ -17,10 +17,15 @@ firstassem = "\n".join([op.disassemble() for op in firstops])
 c.PC = 0xC000
 c.printState()
 
-def run(delay=0.1):
-    while True:
-        c.tick()
-        time.sleep(delay)
+def run(delay=0.05):
+    instructions = 0
+    try:
+        while True:
+            c.tick()
+            instructions += 1
+            time.sleep(delay)
+    finally:
+        print "Executed %d instructions." % instructions
 
 if __name__ == "__main__":
     run()        

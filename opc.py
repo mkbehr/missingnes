@@ -260,7 +260,7 @@ def op_adc(instr, cpu):
     # wouldn't fit in a byte, and the overflow flag represents
     # changing the sign (7th bit) of the accumulator.
     oldA = cpu.reg_A
-    addend = instr.readMem(cpu)
+    addend = ord(instr.readMem(cpu))
     result = oldA + addend
     if cpu.flag(c.FLAG_C):
         result += 1
@@ -286,7 +286,7 @@ opFamily("ADC", op_adc,
 
 def op_sbc(instr, cpu):
     oldA = cpu.reg_A
-    addend = instr.readMem(cpu)
+    addend = ord(instr.readMem(cpu))
     # get -M with two's complement (this will map 0x80 to 0x80 but
     # don't worry about it)
     subtractend = (addend ^ 0xff) + 1
@@ -573,13 +573,13 @@ def op_tya(instr, cpu):
 make_op("TYA", op_tya, 0x98, AM.imp)
 
 def op_tsx(instr, cpu):
-    cpu.reg_X = cpu.reg_S
+    cpu.reg_X = cpu.SP
     cpu.mathFlags(cpu.reg_X)
 make_op("TSX", op_tsx, 0xBA, AM.imp)
 
 def op_txs(instr, cpu):
-    cpu.reg_S = cpu.reg_X
-    cpu.mathFlags(cpu.reg_S)
+    cpu.SP = cpu.reg_X
+    cpu.mathFlags(cpu.SP)
 make_op("TXS", op_txs, 0x9A, AM.imp)
 
 def op_pla(instr, cpu):
