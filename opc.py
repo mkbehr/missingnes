@@ -315,7 +315,7 @@ def cmpHelper(a, b, cpu):
     negb = (b ^ 0xff) + 1
     result = a + negb
     cpu.setFlag(c.FLAG_C, result > 0xff)
-    cpu.setFlag(c.FLAG_Z, (result & 0x80) == 0)
+    cpu.setFlag(c.FLAG_Z, (result & 0xff) == 0)
     cpu.setFlag(c.FLAG_N, result & 0x80)
 
 def op_cmp(instr, cpu):
