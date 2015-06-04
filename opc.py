@@ -101,6 +101,7 @@ class Instruction(object):
             raise RuntimeError("Unrecognized addressing mode")
 
     def readMem(self, cpu):
+        #print "reading %x" % ord(cpu.mem.read(self.memAddr(cpu))) # DEBUG
         return cpu.mem.read(self.memAddr(cpu))
 
     def writeMem(self, val, cpu):
@@ -312,6 +313,7 @@ opFamily("SBC", op_sbc,
          0xF9, AM.aby)
 
 def cmpHelper(a, b, cpu):
+    #print "Comparing %x and %x" % (a,b) # DEBUG
     negb = (b ^ 0xff) + 1
     result = a + negb
     cpu.setFlag(c.FLAG_C, result > 0xff)
@@ -357,7 +359,7 @@ opFamily("DEC", op_dec,
          0xDE, AM.abx)
 
 def op_dex(instr, cpu):
-    val = cpu.reg_X + 1
+    val = cpu.reg_X - 1
     if val < 0x0:
         val = 0xff
     cpu.reg_X = val
@@ -365,7 +367,7 @@ def op_dex(instr, cpu):
 make_op("DEX", op_dex, 0xCA, AM.imp)
 
 def op_dey(instr, cpu):
-    val = cpu.reg_Y + 1
+    val = cpu.reg_Y - 1
     if val < 0x0:
         val = 0xff
     cpu.reg_Y = val
