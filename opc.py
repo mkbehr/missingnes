@@ -579,7 +579,7 @@ make_op("TSX", op_tsx, 0xBA, AM.imp)
 
 def op_txs(instr, cpu):
     cpu.SP = cpu.reg_X
-    cpu.mathFlags(cpu.SP)
+    # does not set math flags
 make_op("TXS", op_txs, 0x9A, AM.imp)
 
 def op_pla(instr, cpu):
