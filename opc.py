@@ -590,10 +590,15 @@ make_op("PHA", op_pha, 0x48, AM.imp)
 
 def op_plp(instr, cpu):
     cpu.flags = ord(cpu.stackPop())
+    cpu.setFlag(c.FLAG_B, False)
 make_op("PLP", op_plp, 0x28, AM.imp)
 
 def op_php(instr, cpu):
-    cpu.stackPush(cpu.flags)
+    # according to
+    # http://wiki.nesdev.com/w/index.php/CPU_status_flag_behavior this
+    # should set B to 1
+    flagsToPush = cpu | c.FLAG_B
+    cpu.stackPush(flagsToPush)
 make_op("PHP", op_php, 0x08, AM.imp)
 
 # Jump/flag commands
@@ -638,9 +643,33 @@ def op_beq(instr, cpu):
         cpu.PC = instr.memAddr()
 make_op("BEQ", op_beq, 0xF0, AM.rel)
 
-op_brk = op_illop # TODO
+def op_brk(instr, cpu):
+    # Trigger an interrupt. Similar to JSR, but it also pushes the
+    # flags register and then sets the I flag. The flags register as
+    # pushed will have the B flag set. The interrupt vector is the IRQ
+    # vector at 0xFFFE.
+    toPush = instr.addr + 2
+    # Yes, we are pushing PC + 2 even though the instruction is one
+    # byte long. Have fun, user! ...okay this says there's a padding byte:
+    # http://nesdev.com/the%20%27B%27%20flag%20&%20BRK%20instruction.txt
+    toPushHigh = toPush >> 8
+    toPushLow = toPush & 0xff
+    cpu.stackPush(toPushHigh)
+    cpu.stackPush(toPushLow)
+    flagsToPush = cpu.flags | c.FLAG_B
+    cpu.stackPush(flagsToPush)
+    cpu.setFlag(c.FLAG_I, True)
+    cpu.PC = cpu.mem.dereference(mem.VEC_IRQ)
 make_op("BRK", op_brk, 0x00, AM.imp)
-op_rti = op_illop # TODO
+
+def op_rti(instr, cpu):
+    # pop flags, then PC
+    cpu.flags = ord(cpu.stackPop())
+    cpu.setFlag(c.FLAG_B, False)
+    pcLow = ord(cpu.stackPop())
+    pcHigh = ord(cpu.stackPop())
+    oldpc = pcLow + (pcHigh << 8)
+    cpu.PC = oldpc + 1
 make_op("RTI", op_rti, 0x40, AM.imp)
 
 def op_jsr(instr, cpu):
