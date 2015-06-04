@@ -318,7 +318,7 @@ def cmpHelper(a, b, cpu):
     cpu.setFlag(c.FLAG_N, result & 0x80)
 
 def op_cmp(instr, cpu):
-    cmpHelper(cpu.reg_A, instr.readMem(cpu))
+    cmpHelper(cpu.reg_A, ord(instr.readMem(cpu)), cpu)
 opFamily("CMP", op_cmp,
          0xC9, AM.imm,
          0xC5, AM.zp,
@@ -330,14 +330,14 @@ opFamily("CMP", op_cmp,
          0xD9, AM.aby)
 
 def op_cpx(instr, cpu):
-    cmpHelper(cpu.reg_X, instr.readMem(cpu))
+    cmpHelper(cpu.reg_X, ord(instr.readMem(cpu)), cpu)
 opFamily("CPX", op_cpx,
          0xE0, AM.imm,
          0xE4, AM.zp,
          0xEC, AM.abs)
 
 def op_cpy(instr, cpu):
-    cmpHelper(cpu.reg_Y, instr.readMem(cpu))
+    cmpHelper(cpu.reg_Y, ord(instr.readMem(cpu)), cpu)
 opFamily("CPY", op_cpy,
          0xC0, AM.imm,
          0xC4, AM.zp,
@@ -584,7 +584,7 @@ def op_pla(instr, cpu):
     cpu.mathFlags(cpu.reg_A)
 make_op("PLA", op_pla, 0x68, AM.imp)
 
-def op_pla(instr, cpu):
+def op_pha(instr, cpu):
     cpu.stackPush(cpu.reg_A)
 make_op("PHA", op_pha, 0x48, AM.imp)
 
@@ -597,7 +597,7 @@ def op_php(instr, cpu):
     # according to
     # http://wiki.nesdev.com/w/index.php/CPU_status_flag_behavior this
     # should set B to 1
-    flagsToPush = cpu | c.FLAG_B
+    flagsToPush = cpu.flags | c.FLAG_B
     cpu.stackPush(flagsToPush)
 make_op("PHP", op_php, 0x08, AM.imp)
 

@@ -3,6 +3,8 @@ import mem
 import opc
 import rom
 
+import time
+
 ROMFILE = 'nestest.nes'
 
 nestestrom = rom.readRom(ROMFILE)
@@ -14,3 +16,8 @@ firstassem = "\n".join([op.disassemble() for op in firstops])
 
 c.PC = 0xC000
 c.printState()
+
+def run(delay=0.1):
+    while True:
+        c.tick()
+        time.sleep(delay)
