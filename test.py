@@ -21,3 +21,6 @@ def run(delay=0.1):
     while True:
         c.tick()
         time.sleep(delay)
+
+if __name__ == "__main__":
+    run()        

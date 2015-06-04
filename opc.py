@@ -40,10 +40,11 @@ class Opcode(object):
 
 class Instruction(object):
     
-    def __init__(self, addr, opcode, addrData):
+    def __init__(self, addr, opcode, addrData, rawBytes):
         self.addr = addr
         self.opcode = opcode
         self.addrData = addrData
+        self.rawBytes = rawBytes
 
     @property
     def size(self):
@@ -92,11 +93,11 @@ class Instruction(object):
             raise NotImplementedError()
 
         elif am == AM.rel:
-            # here addrData is a signed integer that represents an
+            # Here addrData is a signed integer that represents an
             # offest from the address we'll reach after the
-            # instruction, at least as far as I can tell
+            # instruction, at least as far as I can tell. No endianness to worry about.
             offset = struct.unpack('b', self.addrData)[0]
-            target = self.addr + offset # no endianness to worry about
+            target = self.addr + offset + 2 # lol computers
             return target
         else:
             raise RuntimeError("Unrecognized addressing mode")
@@ -151,15 +152,17 @@ class Instruction(object):
             raise RuntimeError("Unrecognized addressing mode")
 
     def disassemble(self): # TODO print hex data here too
-        return "%04x:    %s %s" % (self.addr,
-                                   self.opcode.name,
-                                   self.addrDataStr())
+        return "%04x:    %s %s    %s" % (self.addr,
+                                         self.opcode.name,
+                                         self.addrDataStr(),
+                                         str([hex(ord(b)) for b in self.rawBytes]))
 
     @staticmethod
     def fromAddr(address, cpu):
         code = opcodeLookup(ord(cpu.mem.read(address)))
-        addrData = cpu.mem.read(address+1, nbytes = code.addrSize)
-        return Instruction(address, code, addrData)
+        rawBytes = cpu.mem.read(address, nbytes = code.addrSize+1)
+        addrData = rawBytes[1:]
+        return Instruction(address, code, addrData, rawBytes)
 
     @staticmethod
     def listFromAddr(address, nops, cpu):
