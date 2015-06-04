@@ -56,9 +56,11 @@ class Instruction(object):
         jumps into account)."""
         return self.addr + self.size
 
-    def memAddr(self):
+    def memAddr(self, cpu):
         """Returns the memory address to be written to or read from. This will
         depend on the addressing mode."""
+        # see http://wiki.nesdev.com/w/index.php/CPU_addressing_modes
+        
         # we convert endianness here
         am = self.opcode.addrMode
         if am == AM.imp:
@@ -69,29 +71,25 @@ class Instruction(object):
         elif am == AM.zp:
             return ord(self.addrData) # address high byte is zero (hence "zero page")
         elif am == AM.zpx:
-            raise NotImplementedError()
-
+            return (ord(self.addrData) + cpu.reg_X) % 256
         elif am == AM.zpy:
-            raise NotImplementedError()
-
+            return (ord(self.addrData) + cpu.reg_Y) % 256
         elif am == AM.izx:
-            raise NotImplementedError()
-
+            pointer = (ord(self.addrData) + cpu.reg_X) % 256
+            return cpu.mem.dereference(pointer)
         elif am == AM.izy:
-            raise NotImplementedError()
-
+            return cpu.mem.dereference(ord(self.addrData)) + cpu.reg_Y
         # remember little-endian from here on
         elif am == AM.abs:
             return struct.unpack('H', self.addrData)[0]
         elif am == AM.abx:
-            raise NotImplementedError()
-
+            offset = struct.unpack('b', self.addrData)[0]
+            return offset + cpu.reg_X
         elif am == AM.aby:
-            raise NotImplementedError()
-
+            offset = struct.unpack('b', self.addrData)[0]
+            return offset + cpu.reg_Y
         elif am == AM.ind:
-            raise NotImplementedError()
-
+            return cpu.mem.dereference(self.addr+1)
         elif am == AM.rel:
             # Here addrData is a signed integer that represents an
             # offest from the address we'll reach after the
@@ -103,10 +101,10 @@ class Instruction(object):
             raise RuntimeError("Unrecognized addressing mode")
 
     def readMem(self, cpu):
-        return cpu.mem.read(self.memAddr())
+        return cpu.mem.read(self.memAddr(cpu))
 
     def writeMem(self, val, cpu):
-        cpu.mem.write(self.memAddr(), val)
+        cpu.mem.write(self.memAddr(cpu), val)
 
     def call(self, cpu):
         self.opcode.f(self, cpu)
@@ -608,42 +606,42 @@ make_op("PHP", op_php, 0x08, AM.imp)
 
 def op_bpl(instr, cpu):
     if not cpu.flag(c.FLAG_N):
-        cpu.PC = instr.memAddr()
+        cpu.PC = instr.memAddr(cpu)
 make_op("BPL", op_bpl, 0x10, AM.rel)
 
 def op_bmi(instr, cpu):
     if cpu.flag(c.FLAG_N):
-        cpu.PC = instr.memAddr()
+        cpu.PC = instr.memAddr(cpu)
 make_op("BMI", op_bmi, 0x30, AM.rel)
 
 def op_bvc(instr, cpu):
     if not cpu.flag(c.FLAG_V):
-        cpu.PC = instr.memAddr()
+        cpu.PC = instr.memAddr(cpu)
 make_op("BVC", op_bvc, 0x50, AM.rel)
 
 def op_bvs(instr, cpu):
     if cpu.flag(c.FLAG_V):
-        cpu.PC = instr.memAddr()
+        cpu.PC = instr.memAddr(cpu)
 make_op("BVS", op_bvs, 0x70, AM.rel)
 
 def op_bcc(instr, cpu):
     if not cpu.flag(c.FLAG_C):
-        cpu.PC = instr.memAddr()
+        cpu.PC = instr.memAddr(cpu)
 make_op("BCC", op_bcc, 0x90, AM.rel)
 
 def op_bcs(instr, cpu):
     if cpu.flag(c.FLAG_C):
-        cpu.PC = instr.memAddr()
+        cpu.PC = instr.memAddr(cpu)
 make_op("BCS", op_bcs, 0xB0, AM.rel)
 
 def op_bne(instr, cpu):
     if not cpu.flag(c.FLAG_Z):
-        cpu.PC = instr.memAddr()
+        cpu.PC = instr.memAddr(cpu)
 make_op("BNE", op_bne, 0xD0, AM.rel)
 
 def op_beq(instr, cpu):
     if cpu.flag(c.FLAG_Z):
-        cpu.PC = instr.memAddr()
+        cpu.PC = instr.memAddr(cpu)
 make_op("BEQ", op_beq, 0xF0, AM.rel)
 
 def op_brk(instr, cpu):
@@ -687,7 +685,7 @@ def op_jsr(instr, cpu):
     toPushLow = toPush & 0xff
     cpu.stackPush(toPushHigh)
     cpu.stackPush(toPushLow)
-    cpu.PC = instr.memAddr()
+    cpu.PC = instr.memAddr(cpu)
 make_op("JSR", op_jsr, 0x20, AM.abs)
 
 def op_rts(instr, cpu):
@@ -700,7 +698,7 @@ def op_rts(instr, cpu):
 make_op("RTS", op_rts, 0x60, AM.imp)
 
 def op_jmp(instr, cpu):
-    cpu.PC = instr.memAddr()
+    cpu.PC = instr.memAddr(cpu)
 opFamily("JMP", op_jmp,
          0x4C, AM.abs,
          0x6C, AM.ind)
