@@ -43,7 +43,7 @@ class CPU(object):
         self.PC = self.mem.dereference(mem.VEC_RST)
 
     def flag(self, mask):
-        return self.flags & mask
+        return bool(self.flags & mask)
 
     def setFlag(self, mask, val): # val should be boolean
         if val:

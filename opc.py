@@ -245,13 +245,32 @@ opFamily("EOR", op_eor,
          0x5D, AM.abx,
          0x59, AM.aby)
 
-op_adc = op_illop # TODO
-#
-# we'll need to figure out how signedness works, and also decimal mode
-# (though looking at section 2.2.1 of the manual, maybe we don't need
-# to worry about signedness after all? I'm confused. okay yeah it's
-# fine, see section 2.2.1.1. But we still have to deal with decimal
-# mode?)
+def op_adc(instr, cpu):
+    # Add the specified memory contents and the carry bit to the
+    # accumulator (and set appropriate flags).
+    #
+    # The 6502 specifies that this and subtraction should use
+    # binary-coded decimal if the D flag is set, but the NES's 2A03
+    # doesn't include decimal mode so we can ignore that.
+    #
+    # The carry flag represents carrying when the unsigned result
+    # wouldn't fit in a byte, and the overflow flag represents
+    # changing the sign (7th bit) of the accumulator.
+    oldA = cpu.reg_A
+    addend = instr.readMem(cpu)
+    result = oldA + addend
+    if cpu.flag(c.FLAG_C):
+        result += 1
+    if result > 0xff:
+        result &= 0xff
+        cpu.setFlag(c.FLAG_C, True)
+    else:
+        cpu.setFlag(c.FLAG_C, False)
+    cpu.setFlag(c.FLAG_V,
+                (oldA & 0x80) == (addend & 0x80) and
+                (result & 0x80) != (oldA & 0x80))
+    cpu.reg_A = result
+    cpu.mathFlags(result)
 opFamily("ADC", op_adc,
          0x69, AM.imm,
          0x65, AM.zp,
@@ -261,7 +280,26 @@ opFamily("ADC", op_adc,
          0x6D, AM.abs,
          0x7D, AM.abx,
          0x79, AM.aby)
-op_sbc = op_illop # TODO
+
+def op_sbc(instr, cpu):
+    oldA = cpu.reg_A
+    addend = instr.readMem(cpu)
+    # get -M with two's complement (this will map 0x80 to 0x80 but
+    # don't worry about it)
+    subtractend = (addend ^ 0xff) + 1
+    result = oldA + subtractend
+    if not cpu.flag(c.FLAG_C):
+        result -= 1
+    if result > 0xff:
+        result &= 0xff
+        cpu.setFlag(c.FLAG_C, True)
+    else:
+        cpu.setFlag(c.FLAG_C, False)
+    cpu.setFlag(c.FLAG_V,
+                (oldA & 0x80) == (subtractend & 0x80) and
+                (result & 0x80) != (oldA & 0x80))
+    cpu.reg_A = result
+    cpu.mathFlags(result)
 opFamily("SBC", op_sbc,
          0xE9, AM.imm,
          0xE5, AM.zp,
@@ -271,7 +309,16 @@ opFamily("SBC", op_sbc,
          0xED, AM.abs,
          0xFD, AM.abx,
          0xF9, AM.aby)
-op_cmp = op_illop # TODO
+
+def cmpHelper(a, b, cpu):
+    negb = (b ^ 0xff) + 1
+    result = a + negb + 1
+    cpu.setFlag(c.FLAG_C, result > 0xff)
+    cpu.setFlag(c.FLAG_Z, result == 0)
+    cpu.setFlag(c.FLAG_N, result & 0x80)
+
+def op_cmp(instr, cpu):
+    cmpHelper(cpu.reg_A, instr.readMem(cpu))
 opFamily("CMP", op_cmp,
          0xC9, AM.imm,
          0xC5, AM.zp,
@@ -281,58 +328,157 @@ opFamily("CMP", op_cmp,
          0xCD, AM.abs,
          0xDD, AM.abx,
          0xD9, AM.aby)
-op_cpx = op_illop # TODO
+
+def op_cpx(instr, cpu):
+    cmpHelper(cpu.reg_X, instr.readMem(cpu))
 opFamily("CPX", op_cpx,
          0xE0, AM.imm,
          0xE4, AM.zp,
          0xEC, AM.abs)
-op_cpy = op_illop # TODO
+
+def op_cpy(instr, cpu):
+    cmpHelper(cpu.reg_Y, instr.readMem(cpu))
 opFamily("CPY", op_cpy,
          0xC0, AM.imm,
          0xC4, AM.zp,
          0xCC, AM.abs)
-op_dec = op_illop # TODO
+
+def op_dec(instr, cpu):
+    val = ord(instr.readMem(cpu)) - 1
+    if val < 0x0:
+        val = 0xff
+    instr.writeMem(val, cpu)
+    cpu.mathFlags(val)
 opFamily("DEC", op_dec,
          0xC6, AM.zp,
          0xD6, AM.zpx,
          0xCE, AM.abs,
          0xDE, AM.abx)
-op_dex = op_illop # TODO
+
+def op_dex(instr, cpu):
+    val = cpu.reg_X + 1
+    if val < 0x0:
+        val = 0xff
+    cpu.reg_X = val
+    cpu.mathFlags(val)
 make_op("DEX", op_dex, 0xCA, AM.imp)
-op_dey = op_illop # TODO
+
+def op_dey(instr, cpu):
+    val = cpu.reg_Y + 1
+    if val < 0x0:
+        val = 0xff
+    cpu.reg_Y = val
+    cpu.mathFlags(val)
 make_op("DEY", op_dey, 0x88, AM.imp)
-op_inc = op_illop # TODO
+
+def op_inc(instr, cpu):
+    val = ord(instr.readMem(cpu)) + 1
+    if val > 0xff:
+        val = 0
+    instr.writeMem(val, cpu)
+    cpu.mathFlags(val)
 opFamily("INC", op_inc,
          0xE6, AM.zp,
          0xF6, AM.zpx,
          0xEE, AM.abs,
          0xFE, AM.abx)
-op_inx = op_illop # TODO
+
+def op_inx(instr, cpu):
+    val = cpu.reg_X + 1
+    if val > 0xff:
+        val = 0
+    cpu.reg_X = val
+    cpu.mathFlags(val)
 make_op("INX", op_inx, 0xE8, AM.imp)
-op_iny = op_illop # TODO
+
+op_iny = op_illop
+def op_iny(instr, cpu):
+    val = cpu.reg_Y + 1
+    if val > 0xff:
+        val = 0
+    cpu.reg_Y = val
+    cpu.mathFlags(val)
 make_op("INY", op_iny, 0xC8, AM.imp)
-op_asl = op_illop # TODO
+
+def op_asl(instr, cpu):
+    # Shift memory or accumulator one bit left, storing bit 7 in carry
+    # flag
+    if instr.opcode.addrMode == AM.imp:
+        input = cpu.reg_A
+    else:
+        input = ord(instr.readMem(cpu))
+    cpu.setFlag(c.FLAG_C, input & 0x80)
+    output = (input << 1) & 0xff
+    cpu.mathFlags(output)
+    if instr.opcode.addrMode == AM.imp:
+        cpu.reg_A = output
+    else:
+        instr.writeMem(output, cpu)
 opFamily("ASL", op_asl,
          0x0A, AM.imp,
          0x06, AM.zp,
          0x16, AM.zpx,
          0x0E, AM.abs,
          0x1E, AM.abx)
-op_rol = op_illop # TODO
+
+def op_rol(instr, cpu):
+    # Rotate memory or accumulator one bit left, placing old bit 7 in
+    # new bit 0
+    if instr.opcode.addrMode == AM.imp:
+        input = cpu.reg_A
+    else:
+        input = ord(instr.readMem(cpu))
+    output = (input << 1) & 0xff
+    if input & 0x80:
+        output |= 0x1
+    cpu.mathFlags(output)
+    if instr.opcode.addrMode == AM.imp:
+        cpu.reg_A = output
+    else:
+        instr.writeMem(output, cpu)
 opFamily("ROL", op_rol,
          0x2A, AM.imp,
          0x26, AM.zp,
          0x36, AM.zpx,
          0x2E, AM.abs,
          0x3E, AM.abx)
-op_lsr = op_illop # TODO
+
+def op_lsr(instr, cpu):
+    # Shift memory or accumulator one bit right, storing bit 0 in
+    # carry flag
+    if instr.opcode.addrMode == AM.imp:
+        input = cpu.reg_A
+    else:
+        input = ord(instr.readMem(cpu))
+    cpu.setFlag(c.FLAG_C, input & 0x01)
+    output = input >> 1
+    cpu.mathFlags(output)
+    if instr.opcode.addrMode == AM.imp:
+        cpu.reg_A = output
+    else:
+        instr.writeMem(output, cpu)
 opFamily("LSR", op_lsr,
          0x4A, AM.imp,
          0x46, AM.zp,
          0x56, AM.zpx,
          0x4E, AM.abs,
          0x5E, AM.abx)
-op_ror = op_illop # TODO
+
+def op_ror(instr, cpu):
+    # Rotate memory or accumulator one bit right, placing old bit 0 in
+    # new bit 7
+    if instr.opcode.addrMode == AM.imp:
+        input = cpu.reg_A
+    else:
+        input = ord(instr.readMem(cpu))
+    output = input >> 1
+    if input & 0x01:
+        output |= 0x80
+    cpu.mathFlags(output)
+    if instr.opcode.addrMode == AM.imp:
+        cpu.reg_A = output
+    else:
+        instr.writeMem(output, cpu)
 opFamily("ROR", op_ror,
          0x6A, AM.imp,
          0x66, AM.zp,
