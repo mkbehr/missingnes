@@ -17,13 +17,22 @@ firstassem = "\n".join([op.disassemble() for op in firstops])
 c.PC = 0xC000
 c.printState()
 
-def run(delay=0.05):
+def run(delay=0.0001):
     instructions = 0
     try:
         while True:
             c.tick()
             instructions += 1
             time.sleep(delay)
+    finally:
+        print "Executed %d instructions." % instructions
+
+def runUntil(address):
+    instructions = 0
+    try:
+        while c.PC != address:
+            c.tick()
+            instructions += 1
     finally:
         print "Executed %d instructions." % instructions
 

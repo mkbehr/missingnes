@@ -69,8 +69,8 @@ class CPU(object):
         return self.mem.read(self.SP)
 
     def printState(self):
-        print ("A = %02x X = %02x Y = %02x flags = %02x PC = %04x" %
-               (self.reg_A, self.reg_X, self.reg_Y, self.flags, self.PC))
+        print ("A = %02x X = %02x Y = %02x SP=%02x flags = %02x PC = %04x" %
+               (self.reg_A, self.reg_X, self.reg_Y, self.SP, self.flags, self.PC))
         instruction = opc.Instruction.fromAddr(self.PC, self)
         print instruction.disassemble()
 

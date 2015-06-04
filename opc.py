@@ -144,7 +144,7 @@ class Instruction(object):
             # offest from the address we'll reach after the
             # instruction, at least as far as I can tell
             offset = struct.unpack('b', self.addrData)[0]
-            target = self.addr + offset # no endianness to worry about
+            target = self.addr + offset + 2 # no endianness to worry about
             return "$%04x" % target
         else:
             raise RuntimeError("Unrecognized addressing mode")
@@ -158,7 +158,7 @@ class Instruction(object):
     @staticmethod
     def fromAddr(address, cpu):
         code = opcodeLookup(ord(cpu.mem.read(address)))
-        rawBytes = cpu.mem.read(address, nbytes = code.addrSize+1)
+        rawBytes = cpu.mem.readMany(address, nbytes = code.addrSize+1)
         addrData = rawBytes[1:]
         return Instruction(address, code, addrData, rawBytes)
 
@@ -313,9 +313,9 @@ opFamily("SBC", op_sbc,
 
 def cmpHelper(a, b, cpu):
     negb = (b ^ 0xff) + 1
-    result = a + negb + 1
+    result = a + negb
     cpu.setFlag(c.FLAG_C, result > 0xff)
-    cpu.setFlag(c.FLAG_Z, result == 0)
+    cpu.setFlag(c.FLAG_Z, (result & 0x80) == 0)
     cpu.setFlag(c.FLAG_N, result & 0x80)
 
 def op_cmp(instr, cpu):
@@ -670,7 +670,7 @@ def op_rti(instr, cpu):
     pcLow = ord(cpu.stackPop())
     pcHigh = ord(cpu.stackPop())
     oldpc = pcLow + (pcHigh << 8)
-    cpu.PC = oldpc + 1
+    cpu.PC = oldpc # this differs from RTS
 make_op("RTI", op_rti, 0x40, AM.imp)
 
 def op_jsr(instr, cpu):

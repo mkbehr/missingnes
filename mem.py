@@ -21,8 +21,13 @@ class Memory(object):
         self.cpu = cpu
         self.ram = ['\xff'] * RAM_SIZE
 
+    def readMany(self, address, nbytes):
+        out = ""
+        for i in range(nbytes):
+            out += self.read(address + i)
+        return out
 
-    def read(self, address, nbytes=1):
+    def read(self, address):
         if 0x0 <= address < 0x2000:
             # Internal RAM from $0000 to $07FF; higher addresses here are mirrored
             return self.ram[address % 0x0800]
@@ -42,7 +47,7 @@ class Memory(object):
             prgaddr = address - 0x8000
             if prgaddr >= 0x4000:
                 prgaddr -= 0x4000
-            return self.cpu.prgrom[prgaddr:prgaddr+nbytes]
+            return self.cpu.prgrom[prgaddr]
         else:
             raise RuntimeError("Address out of range: %x" % address)
 
@@ -69,7 +74,7 @@ class Memory(object):
     
     def dereference(self, paddr): # utility function
         """Dereference a 16-bit pointer."""
-        pointer = self.read(paddr, nbytes=2)
+        pointer = self.readMany(paddr, nbytes=2)
         return struct.unpack("<H", pointer)[0]
 
 class AddrMode(Enum):
