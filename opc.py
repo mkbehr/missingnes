@@ -85,18 +85,25 @@ class Instruction(object):
             pointer = ord(self.addrData)
             addrLow = ord(cpu.mem.read(pointer))
             addrHigh = ord(cpu.mem.read((pointer + 1) % 256))
-            return (addrLow + addrHigh * 256 + cpu.reg_Y) % 0x10000
+            return (addrLow + addrHigh * 256 + cpu.reg_Y) & 0xffff
         # remember little-endian from here on
         elif am == AM.abs:
             return struct.unpack('H', self.addrData)[0]
         elif am == AM.abx:
             offset = struct.unpack('H', self.addrData)[0]
-            return offset + cpu.reg_X
+            return (offset + cpu.reg_X) & 0xffff
         elif am == AM.aby:
             offset = struct.unpack('H', self.addrData)[0]
-            return offset + cpu.reg_Y
+            return (offset + cpu.reg_Y) & 0xffff
         elif am == AM.ind:
-            return cpu.mem.dereference(self.addr+1)
+            pointer = struct.unpack('H', self.addrData)[0]
+            addrLow = ord(cpu.mem.read(pointer))
+            # 6502 bug? see http://forums.nesdev.com/viewtopic.php?t=5388
+            addrHighLoc = pointer + 1
+            if (addrHighLoc & 0xff00) != (pointer & 0xff00):
+                addrHighLoc -= 0x100
+            addrHigh = ord(cpu.mem.read(addrHighLoc))
+            return addrLow + addrHigh * 256
         elif am == AM.rel:
             # Here addrData is a signed integer that represents an
             # offest from the address we'll reach after the
