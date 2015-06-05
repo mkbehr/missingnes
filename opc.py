@@ -74,19 +74,26 @@ class Instruction(object):
             return (ord(self.addrData) + cpu.reg_X) % 256
         elif am == AM.zpy:
             return (ord(self.addrData) + cpu.reg_Y) % 256
+        # can't use the dereference utility function for this because
+        # we have to stay in the zero page
         elif am == AM.izx:
             pointer = (ord(self.addrData) + cpu.reg_X) % 256
-            return cpu.mem.dereference(pointer)
+            addrLow = ord(cpu.mem.read(pointer))
+            addrHigh = ord(cpu.mem.read((pointer + 1) % 256))
+            return addrLow + addrHigh * 256
         elif am == AM.izy:
-            return cpu.mem.dereference(ord(self.addrData)) + cpu.reg_Y
+            pointer = ord(self.addrData)
+            addrLow = ord(cpu.mem.read(pointer))
+            addrHigh = ord(cpu.mem.read((pointer + 1) % 256))
+            return (addrLow + addrHigh * 256 + cpu.reg_Y) % 0x10000
         # remember little-endian from here on
         elif am == AM.abs:
             return struct.unpack('H', self.addrData)[0]
         elif am == AM.abx:
-            offset = struct.unpack('b', self.addrData)[0]
+            offset = struct.unpack('H', self.addrData)[0]
             return offset + cpu.reg_X
         elif am == AM.aby:
-            offset = struct.unpack('b', self.addrData)[0]
+            offset = struct.unpack('H', self.addrData)[0]
             return offset + cpu.reg_Y
         elif am == AM.ind:
             return cpu.mem.dereference(self.addr+1)
@@ -105,6 +112,7 @@ class Instruction(object):
         return cpu.mem.read(self.memAddr(cpu))
 
     def writeMem(self, val, cpu):
+        print "WRITING to %x" % self.memAddr(cpu) # DEBUG
         cpu.mem.write(self.memAddr(cpu), val)
 
     def call(self, cpu):
