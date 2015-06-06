@@ -12,6 +12,8 @@ VEC_IRQ = 0xFFFE
 
 RAM_SIZE = 0x0800
 
+REG_OAMDMA = 0x4014
+
 class Memory(object):
 
     def __init__(self, cpu):
