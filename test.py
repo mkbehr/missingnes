@@ -5,13 +5,16 @@ import rom
 
 import time
 
-ROMFILE = 'nestest.nes'
-STARTADDR = 0xC000
+# ROMFILE = 'nestest.nes'
+# STARTADDR = 0xC000
 
 ROMFILE = 'instr_test-v4/official_only.nes'
+STARTADDR = None
 
 nestestrom = rom.readRom(ROMFILE)
-c = cpu.CPU(prgrom = nestestrom.prgrom, chrrom = nestestrom.chrrom)
+c = cpu.CPU(prgrom = nestestrom.prgrom,
+            chrrom = nestestrom.chrrom,
+            mapper = nestestrom.mapper)
 startaddr = c.mem.dereference(mem.VEC_RST)
 startop = opc.Instruction.fromAddr(startaddr, c)
 firstops = opc.Instruction.listFromAddr(startaddr, 50, c)

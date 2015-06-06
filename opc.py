@@ -2,9 +2,24 @@ import cpu as c
 import mem
 import struct
 
+from enum import Enum
 from warnings import warn
 
-AM = mem.AddrMode
+class AddrMode(Enum):
+    imp = 1 # implicit
+    imm = 2 # immediate
+    zp = 3 # zero page
+    zpx = 4 # zero page, X
+    zpy = 5 # zero page, Y
+    izx = 6 # indirect, X
+    izy = 7 # indirect, Y
+    abs = 8 # absolute
+    abx = 9 # absolute, X
+    aby = 10 # absolute, Y
+    ind = 11 # indexed
+    rel = 12 # relative
+
+AM = AddrMode
 
 # Length of specifiers for address mode. Instruction length is this + 1.
 ADDR_MODE_LENGTHS = {

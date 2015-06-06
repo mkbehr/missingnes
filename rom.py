@@ -1,7 +1,7 @@
 class NESRom(object):
     """An iNES format ROM file. (Does not support NES 2.0 features.)"""
 
-    def __init__(self, prgrom, chrrom):
+    def __init__(self, prgrom, chrrom, mapper):
         # TODO flags
         
         # TODO: think about what format to store our ROMs in
@@ -9,6 +9,7 @@ class NESRom(object):
         # struct but need to use ord to compare them otherwise)
         self.prgrom = prgrom
         self.chrrom = chrrom
+        self.mapper = mapper
 
     @staticmethod
     def fromByteString(bytes):
@@ -46,8 +47,8 @@ class NESRom(object):
 
         mapper = ((ord(header[6]) & 0xf0) / 0x10) + (ord(header[7]) & 0xf0)
         print "Mapper: %d" % mapper
-        if mapper != 0:
-            notimp("Can't handle nonzero mappers")
+        if mapper != 0 and mapper != 1:
+            notimp("Unimplemented mapper %d" % mapper)
 
         prgram = ord(header[8])
         if prgram == 0:
@@ -69,7 +70,7 @@ class NESRom(object):
 
         print "unread bytes: %d" % (len(bytes) - index)
 
-        return NESRom(prgrom = prgrom, chrrom = chrrom)
+        return NESRom(prgrom = prgrom, chrrom = chrrom, mapper = mapper)
         
 def readRom(path):
     with open(path, 'rb') as f:
