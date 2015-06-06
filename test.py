@@ -6,6 +6,9 @@ import rom
 import time
 
 ROMFILE = 'nestest.nes'
+STARTADDR = 0xC000
+
+ROMFILE = 'instr_test-v4/official_only.nes'
 
 nestestrom = rom.readRom(ROMFILE)
 c = cpu.CPU(prgrom = nestestrom.prgrom, chrrom = nestestrom.chrrom)
@@ -14,7 +17,8 @@ startop = opc.Instruction.fromAddr(startaddr, c)
 firstops = opc.Instruction.listFromAddr(startaddr, 50, c)
 firstassem = "\n".join([op.disassemble() for op in firstops])
 
-c.PC = 0xC000
+if STARTADDR is not None:
+    c.PC = STARTADDR
 c.printState()
 
 def run(delay=0.0001):
