@@ -44,6 +44,10 @@ class CPU(object):
         # reset signal handler
         self.PC = 0
 
+        # TODO also add RST to this
+        self.irqPending = False
+        self.nmiPending = False
+
         self.ppu = ppu.PPU(self)
 
         # Now that everything is set up, simulate the RST signal.
@@ -82,9 +86,33 @@ class CPU(object):
         instruction = opc.Instruction.fromAddr(self.PC, self)
         print instruction.disassemble()
 
-    def tick(self):
+    def interrupt(self, vector):
+        # much like the BRK opcode, but we don't set the B flag, and
+        # the new address is determined by the passed interrupt
+        # vector. In theory there's some "interrupt highjacking"
+        # behavior to emulate but I don't think I care.
+        pcHigh = self.PC >> 8
+        pcLow = self.PC & 0xff
+        self.stackPush(pcHigh)
+        self.stackPush(pcLow)
+        self.stackPush(self.flags)
+        self.setFlag(FLAG_I, True)
+        self.PC = self.mem.dereference(vector)
+
+    def cpuTick(self):
         # let's pretend the clock doesn't exist for now
+        if self.nmiPending:
+            self.interrupt(mem.VEC_NMI)
+            self.nmiPending = False
+        elif self.irqPending and not self.flag(FLAG_I):
+            self.interrupt(mem.VEC_IRQ)
+            self.irqPending = False
+        # TODO also process RST here (if I feel like it)
         instruction = opc.Instruction.fromAddr(self.PC, self)
         self.PC = instruction.nextaddr
         instruction.call(self)
-        self.printState()
+        #self.printState()
+
+    def tick(self):
+        self.ppu.ppuTick()
+        self.cpuTick()

@@ -134,7 +134,7 @@ class Instruction(object):
         return cpu.mem.read(self.memAddr(cpu))
 
     def writeMem(self, val, cpu):
-        print "WRITING to %x" % self.memAddr(cpu) # DEBUG
+        #print "WRITING to %x" % self.memAddr(cpu) # DEBUG
         cpu.mem.write(self.memAddr(cpu), val)
 
     def call(self, cpu):

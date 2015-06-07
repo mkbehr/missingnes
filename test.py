@@ -34,6 +34,8 @@ def run(delay=0.0001):
             c.tick()
             instructions += 1
             time.sleep(delay)
+    except Exception as e:
+        print e
     finally:
         print "Executed %d instructions." % instructions
 

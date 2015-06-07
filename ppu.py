@@ -26,7 +26,7 @@ class PPU(object):
 
         self.scanline = 261
         self.cycle = 0
-        self.frameparity = 0 # skip the last cycle of scanline 261 on odd frames (TODO)
+        self.frame = 0
 
         # values in the latch decay over time in the actual NES, but I
         # don't think that's worth emulating
@@ -151,15 +151,18 @@ class PPU(object):
         if (self.scanline, self.cycle) == VBLANK_START:
             self.vblank = 1
             if self.vblankNMI:
-                # TODO signal NMI
-                pass
+                # signal NMI
+                self.cpu.nmiPending = True
         elif (self.scanline, self.cycle) == VBLANK_END:
             self.vblank = 0
 
         # TODO if we're on a visible pixel, draw that pixel
             
-        self.cycle = (self.cycles + 1) % CYCLES
-        if self.cycles == 0:
-            self.scanline = (self.scanlines + 1) % SCANLINES
+        self.cycle = (self.cycle + 1) % CYCLES
+        if self.cycle == 0:
+            self.scanline = (self.scanline + 1) % SCANLINES
+            if self.scanline == 0:
+                self.frame += 1
+                print "BEGIN PPU FRAME %d" % self.frame
         # TODO skip cycle 340 on scanline 239 on odd
         # frames... hahahaha no I don't care
