@@ -1,5 +1,6 @@
 import mem
 import opc
+import ppu
 
 FLAG_C = 0x1 # carry
 FLAG_Z = 0x2 # zero result
@@ -42,6 +43,8 @@ class CPU(object):
         # program counter: initialize to 0; later set according to the
         # reset signal handler
         self.PC = 0
+
+        self.ppu = ppu.PPU(self)
 
         # Now that everything is set up, simulate the RST signal.
         # If we ever track frames, this will affect those.

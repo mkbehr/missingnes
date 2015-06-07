@@ -12,9 +12,10 @@ VEC_IRQ = 0xFFFE
 
 RAM_SIZE = 0x0800
 
-REG_OAMDMA = 0x4014
+IO_OAMDMA = 0x4014
 
 class Memory(object):
+    """Simple NROM memory mapping and RAM."""
 
     def __init__(self, cpu):
         # ignoring some special bytes. see:
@@ -34,8 +35,7 @@ class Memory(object):
             return self.ram[address % 0x0800]
         elif 0x2000 <= address < 0x4000:
             register = (address - 0x2000) % 8
-            raise NotImplementedError("Can't read PPU register %d at 0x%04x: no PPU" %
-                                      (register, address))
+            return self.cpu.ppu.readReg(register)
         elif 0x4000 < address <= 0x4020:
             raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
                                       address)
@@ -63,11 +63,13 @@ class Memory(object):
             self.ram[address % 0x0800] = val
         elif 0x2000 <= address < 0x4000:
             register = (address - 0x2000) % 8
-            raise NotImplementedError("Can't write PPU register %d at 0x%04x: no PPU" %
-                                      (register, address))
+            self.cpu.ppu.writeReg(register, ord(val))
         elif 0x4000 < address <= 0x4020:
-            raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
-                                      address)
+            if address == IO_OAMDMA:
+                raise NotImplementedError("OAMDMA not implemented")
+            else:
+                raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
+                                          address)
         elif 0x4020 <= address <= 0xffff:
             raise RuntimeError("Tried to write to ROM address %x" % address)
         else:
@@ -77,6 +79,12 @@ class Memory(object):
         """Dereference a 16-bit pointer."""
         pointer = self.readMany(paddr, nbytes=2)
         return struct.unpack("<H", pointer)[0]
+
+    def ppuRead(self, address):
+        return self.chrrom[address]
+
+    def ppuWrite(self, address, val):
+        raise RuntimeError("Can't write to CHR ROM")
 
 class MMC1(Memory):
     # TODO properly structure these classes - right now I'm mostly
@@ -185,3 +193,9 @@ class MMC1(Memory):
             self.PRGBank = val & 0x0f
         else:
             raise RuntimeError("Bad mapper register address %x" % address)
+
+    def ppuRead(self, address):
+        raise NotImplementedError()
+
+    def ppuWrite(self, address, val):
+        raise NotImplementedError()

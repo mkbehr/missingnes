@@ -37,7 +37,7 @@ class NESRom(object):
         if chrromsize:
             print "CHR ROM size: %d" % chrromsize
         else:
-            print "CHR RAM"
+            notimp("CHR RAM")
 
         print "Flags 6 (unimplemented): %s" % format(ord(header[6]), '08b')
         if ord(header[6]) & 2:

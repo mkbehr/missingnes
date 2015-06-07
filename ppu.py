@@ -1,3 +1,5 @@
+import sys
+
 REG_PPUCTRL = 0
 REG_PPUMASK = 1
 REG_PPUSTATUS = 2
@@ -7,6 +9,8 @@ REG_PPUSCROLL = 5
 REG_PPUADDR = 6
 REG_PPUDATA = 7
 
+OAM_SIZE = 256
+
 class PPU(object):
 
     def __init__(self, cpu):
@@ -14,7 +18,9 @@ class PPU(object):
 
         # values in the latch decay over time in the actual NES, but I
         # don't think that's worth emulating
-        self.latch = '\x00'
+        self.latch = 0x0
+
+        self.oam = '\x00' * OAM_SIZE
 
         ## PPUCTRL flags
         
@@ -51,7 +57,7 @@ class PPU(object):
         ## PPUSCROLL
         self.scrollX = 0
         self.scrollY = 0
-        self.nextScroll # 0 for X, 1 for Y
+        self.nextScroll = 0 # 0 for X, 1 for Y
         
 
     def readReg(self, register):
@@ -76,7 +82,7 @@ class PPU(object):
         elif register == REG_OAMADDR:
             print >> sys.stderr, 'Warning: read from OAMADDR'
         elif register == REG_OAMDATA:
-            throw NotImplementedError("OAMDATA register not implemented")
+            raise NotImplementedError("OAMDATA register not implemented")
         elif register == REG_PPUSCROLL:
             print >> sys.stderr, 'Warning: read from PPUSCROLL'
         elif register == REG_PPUADDR:
@@ -85,9 +91,11 @@ class PPU(object):
             pass
         else:
             raise RuntimeError("PPU read from bad register %x" % register)
-        return self.latch
+        return chr(self.latch)
 
     def writeReg(self, register, val):
+        if isinstance(val, str): # someday we will want to get rid of this chr/ord weirdness
+            val = ord(val)
         self.latch = val
         if register == REG_PPUCTRL:
             self.nametableBase = val & 0x3 # bits 0,1
@@ -107,7 +115,7 @@ class PPU(object):
         elif register == REG_OAMADDR:
             self.oamaddr = val
         elif register == REG_OAMDATA:
-            throw NotImplementedError("OAMDATA register not implemented")
+            raise NotImplementedError("OAMDATA register not implemented")
         elif register == REG_PPUSCROLL:
             if self.nextScroll == 0:
                 self.scrollX = val
