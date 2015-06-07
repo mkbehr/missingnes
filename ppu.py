@@ -1,5 +1,13 @@
 import sys
 
+SCANLINES = 262
+VISIBLE_SCANLINES = 240
+CYCLES = 341
+VISIBLE_COLUMNS = 256
+
+VBLANK_START = (241,1)
+VBLANK_END = (261,1)
+
 REG_PPUCTRL = 0
 REG_PPUMASK = 1
 REG_PPUSTATUS = 2
@@ -15,6 +23,10 @@ class PPU(object):
 
     def __init__(self, cpu):
         self.cpu = cpu
+
+        self.scanline = 261
+        self.cycle = 0
+        self.frameparity = 0 # skip the last cycle of scanline 261 on odd frames (TODO)
 
         # values in the latch decay over time in the actual NES, but I
         # don't think that's worth emulating
@@ -76,6 +88,9 @@ class PPU(object):
                 self.latch |= 0x40
             if self.vblank:
                 self.latch |= 0x80
+            # TODO there's some weirdness with reading this register
+            # within like a cycle of when vblank begins, but I don't
+            # think I care enough to emulate that
             self.vblank = False
             # TODO clear address latch
             self.nextScroll = 0
@@ -105,6 +120,8 @@ class PPU(object):
             self.spriteSize = (val >> 5) & 0x1 # bit 5
             self.ppuMasterSlave = (val >> 6) & 0x1 # bit 6
             self.vblankNMI = (val >> 7) & 0x1 # bit 7
+            # TODO if we just set vblankNMI and we're in vblank, this
+            # might be supposed to trigger the NMI
             if self.ppuMasterSlave:
                 raise RuntimeError("We set the PPU master/slave bit! That's bad!")
         elif register == REG_PPUMASK:
@@ -129,3 +146,20 @@ class PPU(object):
             pass
         else:
             raise RuntimeError("PPU write to bad register %x" % register)
+
+    def ppuTick(self):
+        if (self.scanline, self.cycle) == VBLANK_START:
+            self.vblank = 1
+            if self.vblankNMI:
+                # TODO signal NMI
+                pass
+        elif (self.scanline, self.cycle) == VBLANK_END:
+            self.vblank = 0
+
+        # TODO if we're on a visible pixel, draw that pixel
+            
+        self.cycle = (self.cycles + 1) % CYCLES
+        if self.cycles == 0:
+            self.scanline = (self.scanlines + 1) % SCANLINES
+        # TODO skip cycle 340 on scanline 239 on odd
+        # frames... hahahaha no I don't care
