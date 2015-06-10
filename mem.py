@@ -2,6 +2,7 @@
 
 from operator import xor
 import struct
+import sys
 
 # note: 6502 is little-endian
 
@@ -39,6 +40,12 @@ class Memory(object):
             register = (address - 0x2000) % 8
             return self.cpu.ppu.readReg(register)
         elif 0x4000 <= address < 0x4020:
+            if address == 0x4016:
+                print >> sys.stderr, "Warning: reporting no input from joystick 1"
+                return '\x00'
+            elif address == 0x4017:
+                print >> sys.stderr, "Warning: reporting no input from joystick 2"
+                return '\x00'
             # return '\x00' # DEBUG
             raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
                                       address)
@@ -73,10 +80,14 @@ class Memory(object):
                 startaddr = ord(val) * 0x100
                 for i in range(256):
                     self.cpu.ppu.oam[i] = self.read(startaddr + i)
+            elif address == 0x4016:
+                print >> sys.stderr, "Warning: ignoring controller strobe"
+            elif address == 0x4017:
+                print >> sys.stderr, "Warning: ignoring APU frame counter write"
             else:
-                # return # DEBUG
-                raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
-                                          address)
+                # the only non-APU registers are OAMDMA and the joysticks
+                # see http://wiki.nesdev.com/w/index.php/2A03
+                print >> sys.stderr, "Warning: ignoring write to APU register 0x%04x" % address
         elif 0x4020 <= address <= 0xffff:
             raise RuntimeError("Tried to write to ROM address %x" % address)
         else:
@@ -130,9 +141,10 @@ class Memory(object):
             # mirror memory at 0x2000
             self.ppuWrite(address - 0x1000, val)
         elif 0x3f00 <= address <= 0x4000:
-            # return # DEBUG
+            print >> sys.stderr, "Warning: ignoring write to palette memory"
+            return
             # maybe it's its own thing? like OAM?
-            raise NotImplementedError("augh where does the palette memory even live")
+            # raise NotImplementedError("augh where does the palette memory even live")
         else:
             raise RuntimeError("PPU write address out of range: %x" % address)
 
