@@ -38,7 +38,8 @@ class Memory(object):
         elif 0x2000 <= address < 0x4000:
             register = (address - 0x2000) % 8
             return self.cpu.ppu.readReg(register)
-        elif 0x4000 < address <= 0x4020:
+        elif 0x4000 <= address < 0x4020:
+            # return '\x00' # DEBUG
             raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
                                       address)
         elif 0x4020 <= address <= 0xffff:
@@ -66,10 +67,12 @@ class Memory(object):
         elif 0x2000 <= address < 0x4000:
             register = (address - 0x2000) % 8
             self.cpu.ppu.writeReg(register, ord(val))
-        elif 0x4000 < address <= 0x4020:
+        elif 0x4000 <= address < 0x4020:
             if address == IO_OAMDMA:
+                # return # DEBUG
                 raise NotImplementedError("OAMDMA not implemented")
             else:
+                # return # DEBUG
                 raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
                                           address)
         elif 0x4020 <= address <= 0xffff:
@@ -100,15 +103,34 @@ class Memory(object):
             # mirror memory at 0x2000
             return self.ppuRead(address - 0x1000)
         elif 0x3f00 <= address <= 0x4000:
-            return '\x00' # DEBUG
+            # return '\x00' # DEBUG
             # maybe it's its own thing? like OAM?
             raise NotImplementedError("augh where does the palette memory even live")
         else:
             raise RuntimeError("PPU read address out of range: %x" % address)
 
     def ppuWrite(self, address, val):
+        if isinstance(val, int):
+            val = chr(val)
         if 0 <= address < 0x2000:
             raise RuntimeError("Can't write to CHR ROM")
+        elif 0x2000 <= address < 0x3000:
+            # TODO don't duplicate mirroring code
+            paddr = address - 0x2000
+            # adjust paddr for horizontal mirroring
+            if (0x400 <= paddr < 0x800) or (0xc00 <= paddr < 0x1000):
+                paddr -= 0x400
+            # now remember that paddr 2400 lives at vaddr 2800
+            if 0x800 <= paddr:
+                paddr -= 0x800
+            self.ppuram[paddr] = val
+        elif 0x3000 <= address < 0x3f00:
+            # mirror memory at 0x2000
+            self.ppuWrite(address - 0x1000, val)
+        elif 0x3f00 <= address <= 0x4000:
+            # return # DEBUG
+            # maybe it's its own thing? like OAM?
+            raise NotImplementedError("augh where does the palette memory even live")
         else:
             raise RuntimeError("PPU write address out of range: %x" % address)
 

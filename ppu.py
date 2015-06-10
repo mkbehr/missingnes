@@ -71,6 +71,12 @@ class PPU(object):
         self.scrollY = 0
         self.nextScroll = 0 # 0 for X, 1 for Y
 
+        ## PPUADDR
+        self.ppuaddr = 0
+        self.addrHigh = 0
+        self.addrLow = 0
+        self.nextAddr = 0 # 0 for high, 1 for low
+
         self.screen = [[-1 for y in range(VISIBLE_SCANLINES)]
                        for x in range(VISIBLE_COLUMNS)]
 
@@ -94,8 +100,9 @@ class PPU(object):
             # within like a cycle of when vblank begins, but I don't
             # think I care enough to emulate that
             self.vblank = False
-            # TODO clear address latch
+            # clear address latch (pretending they're two different things)
             self.nextScroll = 0
+            self.nextAddr = 0
         elif register == REG_OAMADDR:
             print >> sys.stderr, 'Warning: read from OAMADDR'
         elif register == REG_OAMDATA:
@@ -105,7 +112,8 @@ class PPU(object):
         elif register == REG_PPUADDR:
             print >> sys.stderr, 'Warning: read from PPUADDR'
         elif register == REG_PPUDATA:
-            pass
+            self.latch = ord(self.cpu.mem.ppuRead(self.ppuaddr))
+            self.advanceVram()
         else:
             raise RuntimeError("PPU read from bad register %x" % register)
         return chr(self.latch)
@@ -143,11 +151,25 @@ class PPU(object):
                 self.scrollY = val
                 self.nextScroll = 0
         elif register == REG_PPUADDR:
-            pass
+            if self.nextAddr == 0:
+                self.addrHigh = val
+                self.nextAddr = 1
+            else:
+                self.addrLow = val
+                self.nextAddr = 0
+                self.ppuaddr = self.addrLow + self.addrHigh * 0x100
         elif register == REG_PPUDATA:
-            pass
+            self.cpu.mem.ppuWrite(self.ppuaddr, val)
+            self.advanceVram()
         else:
             raise RuntimeError("PPU write to bad register %x" % register)
+
+    def advanceVram(self):
+        if self.vramInc == 0:
+            self.ppuaddr += 1
+        else:
+            self.ppuaddr += 32
+        self.ppuaddr &= 0xffff
 
     def ppuTick(self):
         if (self.scanline, self.cycle) == VBLANK_START:
