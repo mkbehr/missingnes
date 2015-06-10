@@ -69,8 +69,10 @@ class Memory(object):
             self.cpu.ppu.writeReg(register, ord(val))
         elif 0x4000 <= address < 0x4020:
             if address == IO_OAMDMA:
-                # return # DEBUG
-                raise NotImplementedError("OAMDMA not implemented")
+                print "OAMDMA with value %x" % ord(val)
+                startaddr = ord(val) * 0x100
+                for i in range(256):
+                    self.cpu.ppu.oam[i] = self.read(startaddr + i)
             else:
                 # return # DEBUG
                 raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %

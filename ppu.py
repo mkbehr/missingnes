@@ -32,7 +32,7 @@ class PPU(object):
         # don't think that's worth emulating
         self.latch = 0x0
 
-        self.oam = '\x00' * OAM_SIZE
+        self.oam = ['\x00'] * OAM_SIZE
 
         ## PPUCTRL flags
         
@@ -135,7 +135,7 @@ class PPU(object):
             if self.ppuMasterSlave:
                 raise RuntimeError("We set the PPU master/slave bit! That's bad!")
         elif register == REG_PPUMASK:
-            print >> sys.stderr, "Ignoring write to PPUMASK for now"
+            print >> sys.stderr, "Ignoring write to PPUMASK for now: {0:08b}".format(val)
             pass
         elif register == REG_PPUSTATUS:
             print >> sys.stderr, 'Warning: write to PPUSTATUS'
