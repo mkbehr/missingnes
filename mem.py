@@ -11,6 +11,7 @@ VEC_RST = 0xFFFC
 VEC_IRQ = 0xFFFE
 
 RAM_SIZE = 0x0800
+PPU_RAM_SIZE = 0x0800
 
 IO_OAMDMA = 0x4014
 
@@ -22,6 +23,7 @@ class Memory(object):
         # http://wiki.nesdev.com/w/index.php/CPU_power_up_state
         self.cpu = cpu
         self.ram = ['\xff'] * RAM_SIZE
+        self.ppuram = ['\x00'] * PPU_RAM_SIZE
 
     def readMany(self, address, nbytes):
         out = ""
@@ -81,10 +83,34 @@ class Memory(object):
         return struct.unpack("<H", pointer)[0]
 
     def ppuRead(self, address):
-        return self.chrrom[address]
+        if 0 <= address < 0x2000:
+            return self.cpu.chrrom[address]
+        # assume horizontal mirroring for now.
+        # TODO support switching depending on .nes file flags
+        elif 0x2000 <= address < 0x3000:
+            paddr = address - 0x2000
+            # adjust paddr for horizontal mirroring
+            if (0x400 <= paddr < 0x800) or (0xc00 <= paddr < 0x1000):
+                paddr -= 0x400
+            # now remember that paddr 2400 lives at vaddr 2800
+            if 0x800 <= paddr:
+                paddr -= 0x800
+            return self.ppuram[paddr]
+        elif 0x3000 <= address < 0x3f00:
+            # mirror memory at 0x2000
+            return self.ppuRead(address - 0x1000)
+        elif 0x3f00 <= address <= 0x4000:
+            return '\x00' # DEBUG
+            # maybe it's its own thing? like OAM?
+            raise NotImplementedError("augh where does the palette memory even live")
+        else:
+            raise RuntimeError("PPU read address out of range: %x" % address)
 
     def ppuWrite(self, address, val):
-        raise RuntimeError("Can't write to CHR ROM")
+        if 0 <= address < 0x2000:
+            raise RuntimeError("Can't write to CHR ROM")
+        else:
+            raise RuntimeError("PPU write address out of range: %x" % address)
 
 class MMC1(Memory):
     # TODO properly structure these classes - right now I'm mostly

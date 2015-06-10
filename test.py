@@ -27,15 +27,13 @@ if STARTADDR is not None:
     c.PC = STARTADDR
 c.printState()
 
-def run(delay=0.0001):
+def run(delay=0):
     instructions = 0
     try:
         while True:
             c.tick()
             instructions += 1
             time.sleep(delay)
-    except Exception as e:
-        print e
     finally:
         print "Executed %d instructions." % instructions
 
@@ -47,6 +45,17 @@ def runUntil(address):
             instructions += 1
     finally:
         print "Executed %d instructions." % instructions
+
+def showscreen():
+    import numpy as np
+    from matplotlib import pyplot as plt
+    img = 3 - np.array(c.ppu.screen).T
+    fig = plt.imshow(img, interpolation='nearest', cmap='Greys')
+    plt.axis('off')
+    fig.axes.get_xaxis().set_visible(False)
+    fig.axes.get_yaxis().set_visible(False)
+    plt.savefig('screen.png', bbox_inches='tight', pad_inches = 0)
+    plt.show()
 
 if __name__ == "__main__":
     run()        

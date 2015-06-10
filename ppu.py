@@ -70,7 +70,9 @@ class PPU(object):
         self.scrollX = 0
         self.scrollY = 0
         self.nextScroll = 0 # 0 for X, 1 for Y
-        
+
+        self.screen = [[-1 for y in range(VISIBLE_SCANLINES)]
+                       for x in range(VISIBLE_COLUMNS)]
 
     def readReg(self, register):
         # Set the latch, then return it. Write-only registers just set
@@ -157,6 +159,73 @@ class PPU(object):
             self.vblank = 0
 
         # TODO if we're on a visible pixel, draw that pixel
+
+        # For now, we'll only draw backgrounds, and we'll just pay
+        # attention to each pixel as we get there. Also, we'll start
+        # by ignoring palettes and actual graphical output. We'll just
+        # make an array of numbers.
+
+        # TODO hmm, actually we may as well set a row of 8 pixels at a
+        # time here (at least for now)
+        if self.scanline < VISIBLE_SCANLINES and self.cycle < VISIBLE_COLUMNS:
+            # TODO grab data from nametable to find pattern table
+            # entry. There are 30*32 bytes in a pattern table, and
+            # each byte corresponds to an 8*8-pixel tile. So I guess
+            # those bytes are going to correspond to bits 4 through b
+            # of the pattern table address? (make sure they're in the
+            # right order) So:
+
+            row = self.scanline
+            column = self.cycle
+
+            tilerow = row / 8
+            tilecolumn = column / 8
+
+            nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
+            # double-check this:
+            ptabEntry = ord(self.cpu.mem.ppuRead(
+                nametable + tilecolumn + tilerow * 256))
+            # and now ptabEntry is (probably) bits 4 through b of the
+            # pattern table address, at which point we just need to
+            # set bits 0-3 and c as described below
+            
+            # finding pattern table entry:
+            #
+            # bits 0 through 2 are the "fine y offset", the y position
+            # within a tile (y position % 8, I guess)
+            #
+            # bit 3 is the bitplane: we'll need to read once with it
+            # set and once with it unset to get two bits of color
+            #
+            # bits 4 through 7 are the column of the tile (column / 8)
+            #
+            # bits 8 through b are the tile row (row / 8)
+            #
+            # bit c is the same as self.bgPatternTableAddr
+            #
+            # bits d through f are 0 (pattern tables go from 0000 to 1fff)
+
+            lowplane = (
+                (row % 8) + # 0-2: fine y offset
+                (0 << 3) + # 3: dataplane
+                (ptabEntry << 4) + # 4-11: column and row (double-check)
+                (self.bgPatternTableAddr << 12)) # 12: pattern table base
+            highplane = lowplane | 8 # set bit 3 for high dataplane
+            #print "loading pattern table entry at %x" % lowplane
+
+            finex = column % 8
+            
+            pixelbit0 = (ord(self.cpu.mem.ppuRead(lowplane)) >> finex) & 0x1
+            pixelbit1 = (ord(self.cpu.mem.ppuRead(highplane)) >> finex) & 0x1
+            colorindex = pixelbit0 + pixelbit1 * 2
+            # start by just interpreting colorindex as a grayscale
+            # value from 0 (black) to 3 (white); eventually we will
+            # want to look up a color from the attribute tables
+            
+            # color = TODOrelevantgray(colorindex)
+            # TODOdrawpixel(TODOrow, TODOcolumn, TODOcolor)
+
+            self.screen[column][row] = colorindex
             
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:
