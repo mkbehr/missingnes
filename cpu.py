@@ -2,6 +2,10 @@ import mem
 import opc
 import ppu
 
+import sys
+
+STACK_BASE = 0x100
+
 FLAG_C = 0x1 # carry
 FLAG_Z = 0x2 # zero result
 FLAG_I = 0x4 # interrupt disable
@@ -73,12 +77,12 @@ class CPU(object):
         # TODO make sure the stack pointer stays in a sane range. Some
         # sort of consistency check? Properties that can only have
         # limited values assigned to them?
-        self.mem.write(self.SP, val)
+        self.mem.write(STACK_BASE + self.SP, val)
         self.SP -= 1
 
     def stackPop(self):
         self.SP += 1
-        return self.mem.read(self.SP)
+        return self.mem.read(STACK_BASE + self.SP)
 
     def printState(self):
         print ("A = %02x X = %02x Y = %02x SP=%02x flags = %02x PC = %04x" %
@@ -111,7 +115,7 @@ class CPU(object):
         instruction = opc.Instruction.fromAddr(self.PC, self)
         self.PC = instruction.nextaddr
         instruction.call(self)
-        #self.printState()
+        # self.printState()
 
     def tick(self):
         self.ppu.ppuTick()

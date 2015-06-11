@@ -69,6 +69,10 @@ class Memory(object):
         # fix it without like a page table, which is probably more
         # effort than it's worth
         if 0x0 <= address < 0x2000:
+            # if (address % 0x800) == 0xfd:
+            #     print >> sys.stderr, "--- WRITING TO 0xfd FROM %x WITH %x ---" % (address, ord(val))
+            #     print >> sys.stderr, "PC after instruction is %x" % self.cpu.PC
+            #     print >> sys.stderr, "--- WRITING TO 0xfd ---"
             # Internal RAM from $0000 to $07FF; higher addresses here are mirrored
             self.ram[address % 0x0800] = val
         elif 0x2000 <= address < 0x4000:
@@ -76,7 +80,6 @@ class Memory(object):
             self.cpu.ppu.writeReg(register, ord(val))
         elif 0x4000 <= address < 0x4020:
             if address == IO_OAMDMA:
-                print "OAMDMA with value %x" % ord(val)
                 startaddr = ord(val) * 0x100
                 for i in range(256):
                     self.cpu.ppu.oam[i] = self.read(startaddr + i)
