@@ -5,12 +5,13 @@ import rom
 
 import time
 
-# ROMFILE = 'nestest.nes'
-# STARTADDR = 0xC000
+ROMFILE = 'nestest.nes'
+STARTADDR = 0xC000
 
-#ROMFILE = 'instr_test-v4/official_only.nes'
-ROMFILE = 'instr_test-v4/rom_singles/01-basics.nes'
-STARTADDR = None
+# ROMFILE = 'instr_test-v4/official_only.nes'
+# unfortunately, the rom singles use unofficial instructions
+# ROMFILE = 'instr_test-v4/rom_singles/02-implied.nes'
+# STARTADDR = None
 
 # ROMFILE = 'donkeykong.nes'
 # STARTADDR = None
@@ -33,6 +34,16 @@ def run(delay=0):
     try:
         while True:
             c.tick()
+            instructions += 1
+            time.sleep(delay)
+    finally:
+        print "Executed %d instructions." % instructions
+
+def runCpu(delay=0):
+    instructions = 0
+    try:
+        while True:
+            c.cpuTick()
             instructions += 1
             time.sleep(delay)
     finally:
@@ -65,9 +76,12 @@ def instrTest():
     print "running tests"
     while c.mem.prgram[0] == '\x80':
         c.cpuTick()
+    print itMessage()
+
+def itMessage():
     start = 4
     end = c.mem.prgram[start:].index('\x00') + start
-    print ''.join(c.mem.prgram[start:end])
+    return ''.join(c.mem.prgram[start:end])
 
 if __name__ == "__main__":
     run()        
