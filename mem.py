@@ -51,9 +51,10 @@ class Memory(object):
                 if JOYSTICK_WARN:
                     print >> sys.stderr, "Warning: reporting no input from joystick 2"
                 return '\x00'
-            # return '\x00' # DEBUG
-            raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
-                                      address)
+            else:
+                if APU_WARN:
+                    print >> sys.stderr, "Warning: reading 0 from APU register %x" % address
+                return '\x00'
         elif 0x4020 <= address <= 0xffff:
             if self.cpu.prgromsize > 0x4000:
                 raise NotImplementedError("PRG ROM mapping not implemented")

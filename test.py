@@ -57,5 +57,16 @@ def showscreen():
     plt.savefig('screen.png', bbox_inches='tight', pad_inches = 0)
     plt.show()
 
+def instrTest():
+    while c.mem.prgram[0] != '\x80':
+        # ignore GPU for now to run faster
+        c.cpuTick()
+    print "running tests"
+    while c.mem.prgram[0] == '\x80':
+        c.cpuTick()
+    start = 4
+    end = c.mem.prgram.index('\x00')
+    print ''.join(c.mem.prgram[start:end])
+
 if __name__ == "__main__":
     run()        
