@@ -8,11 +8,11 @@ import time
 # ROMFILE = 'nestest.nes'
 # STARTADDR = 0xC000
 
-# ROMFILE = 'instr_test-v4/official_only.nes'
-# STARTADDR = None
-
-ROMFILE = 'donkeykong.nes'
+ROMFILE = 'instr_test-v4/official_only.nes'
 STARTADDR = None
+
+# ROMFILE = 'donkeykong.nes'
+# STARTADDR = None
 
 nestestrom = rom.readRom(ROMFILE)
 c = cpu.CPU(prgrom = nestestrom.prgrom,

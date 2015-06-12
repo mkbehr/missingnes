@@ -1,3 +1,5 @@
+import sys
+
 class NESRom(object):
     """An iNES format ROM file. (Does not support NES 2.0 features.)"""
 
@@ -37,7 +39,8 @@ class NESRom(object):
         if chrromsize:
             print "CHR ROM size: %d" % chrromsize
         else:
-            notimp("CHR RAM")
+            print "CHR RAM"
+            print >> sys.stderr, ("WARNING: CHR RAM not implemented")
 
         print "Flags 6 (unimplemented): %s" % format(ord(header[6]), '08b')
         if ord(header[6]) & 2:

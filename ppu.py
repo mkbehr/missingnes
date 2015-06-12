@@ -1,5 +1,7 @@
 import sys
 
+PPU_DEBUG = False
+
 SCANLINES = 262
 VISIBLE_SCANLINES = 240
 CYCLES = 341
@@ -84,9 +86,11 @@ class PPU(object):
         # Set the latch, then return it. Write-only registers just set
         # the latch, but for now they also print an error message.
         if register == REG_PPUCTRL:
-            print >> sys.stderr, 'Warning: read from PPUCTRL'
+            if PPU_DEBUG:
+                print >> sys.stderr, 'Warning: read from PPUCTRL'
         elif register == REG_PPUMASK:
-            print >> sys.stderr, 'Warning: read from PPUMASK'
+            if PPU_DEBUG:
+                print >> sys.stderr, 'Warning: read from PPUMASK'
         elif register == REG_PPUSTATUS:
             # keep first five bits of latch
             self.latch &= 0x1f
@@ -104,13 +108,16 @@ class PPU(object):
             self.nextScroll = 0
             self.nextAddr = 0
         elif register == REG_OAMADDR:
-            print >> sys.stderr, 'Warning: read from OAMADDR'
+            if PPU_DEBUG:
+                print >> sys.stderr, 'Warning: read from OAMADDR'
         elif register == REG_OAMDATA:
             raise NotImplementedError("OAMDATA register not implemented")
         elif register == REG_PPUSCROLL:
-            print >> sys.stderr, 'Warning: read from PPUSCROLL'
+            if PPU_DEBUG:
+                print >> sys.stderr, 'Warning: read from PPUSCROLL'
         elif register == REG_PPUADDR:
-            print >> sys.stderr, 'Warning: read from PPUADDR'
+            if PPU_DEBUG:
+                print >> sys.stderr, 'Warning: read from PPUADDR'
         elif register == REG_PPUDATA:
             self.latch = ord(self.cpu.mem.ppuRead(self.ppuaddr))
             self.advanceVram()
@@ -135,11 +142,13 @@ class PPU(object):
             if self.ppuMasterSlave:
                 raise RuntimeError("We set the PPU master/slave bit! That's bad!")
         elif register == REG_PPUMASK:
-            print >> sys.stderr, "Ignoring write to PPUMASK for now: {0:08b}".format(val)
-            print >> sys.stderr, "PPUMASK write: next instruction is %x" % self.cpu.PC
+            if PPU_DEBUG:
+                print >> sys.stderr, "Ignoring write to PPUMASK for now: {0:08b}".format(val)
+                print >> sys.stderr, "PPUMASK write: next instruction is %x" % self.cpu.PC
             pass
         elif register == REG_PPUSTATUS:
-            print >> sys.stderr, 'Warning: write to PPUSTATUS'
+            if PPU_DEBUG:
+                print >> sys.stderr, 'Warning: write to PPUSTATUS'
         elif register == REG_OAMADDR:
             self.oamaddr = val
         elif register == REG_OAMDATA:
@@ -255,6 +264,7 @@ class PPU(object):
             self.scanline = (self.scanline + 1) % SCANLINES
             if self.scanline == 0:
                 self.frame += 1
-                print "BEGIN PPU FRAME %d" % self.frame
+                if PPU_DEBUG:
+                    print "BEGIN PPU FRAME %d" % self.frame
         # TODO skip cycle 340 on scanline 239 on odd
         # frames... hahahaha no I don't care

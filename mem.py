@@ -180,6 +180,8 @@ class MMC1(Memory):
         self.shiftIndex = 0
         self.shiftContents = 0x00
 
+        self.prgram = ['\xff'] * 0x2000
+
         # getting startup state from here:
         # http://forums.nesdev.com/viewtopic.php?t=3665
         #
@@ -205,8 +207,9 @@ class MMC1(Memory):
     # to deal with that
 
     def read(self, address):
-        if 0x6000 <= address <= 0x8000:
-            raise NotImplementedError("PRG RAM bank not implemented")
+        if 0x6000 <= address < 0x8000:
+            # TODO check PRGRAMEnable
+            return self.prgram[address - 0x6000]
         elif 0x8000 <= address <= 0xffff:
             if self.PRGSize:
                 bank = self.PRGBank >> 1 # ignore lowest bit
@@ -227,11 +230,17 @@ class MMC1(Memory):
             return super(MMC1, self).read(address)
 
     def write(self, address, val):
-        if 0x8000 <= address <= 0xffff:
-            reset = bool(val % 0x80)
+        if isinstance(val, int): # someday we will want to get rid of this chr/ord weirdness
+            val = chr(val)
+        if 0x6000 <= address < 0x8000:
+            # TODO check PRGRAMEnable
+            self.prgram[address - 0x6000] = val
+        elif 0x8000 <= address <= 0xffff:
+            flags = ord(val)
+            reset = bool(flags % 0x80)
             if not reset:
                 # Set the current bit if the data bit is set
-                if bool(val % 0x1):
+                if bool(flags % 0x1):
                     self.shiftContents |= (1 << self.shiftIndex)
                 # If we're done, write to the register; otherwise,
                 # advance the index
@@ -269,7 +278,9 @@ class MMC1(Memory):
             raise RuntimeError("Bad mapper register address %x" % address)
 
     def ppuRead(self, address):
+        return '\x00' # DEBUG
         raise NotImplementedError()
 
     def ppuWrite(self, address, val):
+        return # DEBUG
         raise NotImplementedError()
