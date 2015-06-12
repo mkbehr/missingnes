@@ -47,6 +47,7 @@ class CPU(object):
         # program counter: initialize to 0; later set according to the
         # reset signal handler
         self.PC = 0
+        self.currentInstruction = 0
 
         # TODO also add RST to this
         self.irqPending = False
@@ -112,6 +113,7 @@ class CPU(object):
             self.interrupt(mem.VEC_IRQ)
             self.irqPending = False
         # TODO also process RST here (if I feel like it)
+        self.currentInstruction = self.PC
         instruction = opc.Instruction.fromAddr(self.PC, self)
         self.PC = instruction.nextaddr
         instruction.call(self)

@@ -136,6 +136,7 @@ class PPU(object):
                 raise RuntimeError("We set the PPU master/slave bit! That's bad!")
         elif register == REG_PPUMASK:
             print >> sys.stderr, "Ignoring write to PPUMASK for now: {0:08b}".format(val)
+            print >> sys.stderr, "PPUMASK write: next instruction is %x" % self.cpu.PC
             pass
         elif register == REG_PPUSTATUS:
             print >> sys.stderr, 'Warning: write to PPUSTATUS'

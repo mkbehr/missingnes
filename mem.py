@@ -16,6 +16,9 @@ PPU_RAM_SIZE = 0x0800
 
 IO_OAMDMA = 0x4014
 
+APU_WARN = False
+JOYSTICK_WARN = False
+
 class Memory(object):
     """Simple NROM memory mapping and RAM."""
 
@@ -41,10 +44,12 @@ class Memory(object):
             return self.cpu.ppu.readReg(register)
         elif 0x4000 <= address < 0x4020:
             if address == 0x4016:
-                print >> sys.stderr, "Warning: reporting no input from joystick 1"
+                if JOYSTICK_WARN:
+                    print >> sys.stderr, "Warning: reporting no input from joystick 1"
                 return '\x00'
             elif address == 0x4017:
-                print >> sys.stderr, "Warning: reporting no input from joystick 2"
+                if JOYSTICK_WARN:
+                    print >> sys.stderr, "Warning: reporting no input from joystick 2"
                 return '\x00'
             # return '\x00' # DEBUG
             raise NotImplementedError("APU or I/O register at 0x%04x not implemented" %
@@ -84,13 +89,16 @@ class Memory(object):
                 for i in range(256):
                     self.cpu.ppu.oam[i] = self.read(startaddr + i)
             elif address == 0x4016:
-                print >> sys.stderr, "Warning: ignoring controller strobe"
+                if JOYSTICK_WARN:
+                    print >> sys.stderr, "Warning: ignoring controller strobe"
             elif address == 0x4017:
-                print >> sys.stderr, "Warning: ignoring APU frame counter write"
+                if APU_WARN:
+                    print >> sys.stderr, "Warning: ignoring APU frame counter write"
             else:
                 # the only non-APU registers are OAMDMA and the joysticks
                 # see http://wiki.nesdev.com/w/index.php/2A03
-                print >> sys.stderr, "Warning: ignoring write to APU register 0x%04x" % address
+                if APU_WARN:
+                    print >> sys.stderr, "Warning: ignoring write to APU register 0x%04x" % address
         elif 0x4020 <= address <= 0xffff:
             raise RuntimeError("Tried to write to ROM address %x" % address)
         else:
@@ -128,6 +136,7 @@ class Memory(object):
     def ppuWrite(self, address, val):
         if isinstance(val, int):
             val = chr(val)
+        # print >> sys.stderr, "[%x] PPU WRITE %x TO %x" % (self.cpu.currentInstruction, ord(val), address) # DEBUG
         if 0 <= address < 0x2000:
             raise RuntimeError("Can't write to CHR ROM")
         elif 0x2000 <= address < 0x3000:
