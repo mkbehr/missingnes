@@ -630,7 +630,7 @@ def op_php(instr, cpu):
     # according to
     # http://wiki.nesdev.com/w/index.php/CPU_status_flag_behavior this
     # should set B to 1
-    flagsToPush = cpu.flags | c.FLAG_B
+    flagsToPush = cpu.flags | c.FLAG_B | c.FLAG_EXP
     cpu.stackPush(flagsToPush)
 make_op("PHP", op_php, 0x08, AM.imp)
 
