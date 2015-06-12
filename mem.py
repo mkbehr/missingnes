@@ -191,6 +191,7 @@ class MMC1(Memory):
         # http://wiki.nesdev.com/w/index.php/CPU_power_up_state
         self.cpu = cpu
         self.ram = ['\xff'] * RAM_SIZE
+        self.prgram = ['\x00'] * PRG_RAM_SIZE
 
         self.shiftIndex = 0
         self.shiftContents = 0x00
