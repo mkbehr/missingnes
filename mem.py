@@ -1,5 +1,7 @@
 # Functions for memory addressing go here.
 
+from ppu import PPU_DEBUG
+
 from operator import xor
 import struct
 import sys
@@ -165,7 +167,8 @@ class Memory(object):
             # mirror memory at 0x2000
             self.ppuWrite(address - 0x1000, val)
         elif 0x3f00 <= address <= 0x4000:
-            print >> sys.stderr, "Warning: ignoring write to palette memory"
+            if PPU_DEBUG:
+                print >> sys.stderr, "Warning: ignoring write to palette memory"
             return
             # maybe it's its own thing? like OAM?
             # raise NotImplementedError("augh where does the palette memory even live")

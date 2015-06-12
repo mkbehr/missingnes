@@ -66,7 +66,7 @@ def instrTest():
     while c.mem.prgram[0] == '\x80':
         c.cpuTick()
     start = 4
-    end = c.mem.prgram.index('\x00')
+    end = c.mem.prgram[start:].index('\x00') + start
     print ''.join(c.mem.prgram[start:end])
 
 if __name__ == "__main__":
