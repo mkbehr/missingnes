@@ -251,9 +251,11 @@ class PPU(object):
 
 
             finex = column % 8
+            # most significant bit is leftmost bit
+            finexbit = 7 - finex
             
-            pixelbit0 = (ord(self.cpu.mem.ppuRead(lowplane)) >> finex) & 0x1
-            pixelbit1 = (ord(self.cpu.mem.ppuRead(highplane)) >> finex) & 0x1
+            pixelbit0 = (ord(self.cpu.mem.ppuRead(lowplane)) >> finexbit) & 0x1
+            pixelbit1 = (ord(self.cpu.mem.ppuRead(highplane)) >> finexbit) & 0x1
             colorindex = pixelbit0 + pixelbit1 * 2
             # start by just interpreting colorindex as a grayscale
             # value from 0 (black) to 3 (white); eventually we will
