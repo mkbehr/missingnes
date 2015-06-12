@@ -12,6 +12,7 @@ VEC_RST = 0xFFFC
 VEC_IRQ = 0xFFFE
 
 RAM_SIZE = 0x0800
+PRG_RAM_SIZE = 0x2000 # Note: PRG RAM is not yet persistent
 PPU_RAM_SIZE = 0x0800
 
 IO_OAMDMA = 0x4014
@@ -28,6 +29,7 @@ class Memory(object):
         self.cpu = cpu
         self.ram = ['\xff'] * RAM_SIZE
         self.ppuram = ['\x00'] * PPU_RAM_SIZE
+        self.prgram = ['\x00'] * PRG_RAM_SIZE
 
     def readMany(self, address, nbytes):
         out = ""
@@ -55,15 +57,20 @@ class Memory(object):
                 if APU_WARN:
                     print >> sys.stderr, "Warning: reading 0 from APU register %x" % address
                 return '\x00'
-        elif 0x4020 <= address <= 0xffff:
-            if self.cpu.prgromsize > 0x4000:
-                raise NotImplementedError("PRG ROM mapping not implemented")
-            # TODO put together a proper mapping:
-            # see http://wiki.nesdev.com/w/index.php/MMC1
-            # and http://wiki.nesdev.com/w/index.php/UxROM
-            prgaddr = address - 0x8000
-            if prgaddr >= 0x4000:
-                prgaddr -= 0x4000
+        elif 0x4020 <= address < 0x6000:
+            raise RuntimeError("Read from unmapped address %x" % address)
+        elif 0x6000 <= address < 0x8000:
+            return self.prgram[address - 0x6000]
+        elif 0x8000 <= address <= 0xffff:
+            if self.cpu.prgromsize == 0x4000:
+                prgaddr = address - 0x8000
+                if prgaddr >= 0x4000:
+                    prgaddr -= 0x4000
+            elif self.cpu.prgromsize == 0x8000:
+                prgaddr = address - 0x8000
+            else:
+                raise RuntimeError("Unsupported NROM size for PRG ROM: %d bytes"
+                                   % self.cpu.prgromsize)
             return self.cpu.prgrom[prgaddr]
         else:
             raise RuntimeError("Address out of range: %x" % address)
@@ -100,7 +107,11 @@ class Memory(object):
                 # see http://wiki.nesdev.com/w/index.php/2A03
                 if APU_WARN:
                     print >> sys.stderr, "Warning: ignoring write to APU register 0x%04x" % address
-        elif 0x4020 <= address <= 0xffff:
+        elif 0x4020 <= address < 0x6000:
+            raise RuntimeError("Write to unmapped address %x" % address)
+        elif 0x6000 <= address < 0x8000:
+            self.prgram[address - 0x6000] = val
+        elif 0x8000 <= address <= 0xffff:
             raise RuntimeError("Tried to write to ROM address %x" % address)
         else:
             raise RuntimeError("Address out of range: %x" % address)
@@ -180,8 +191,6 @@ class MMC1(Memory):
 
         self.shiftIndex = 0
         self.shiftContents = 0x00
-
-        self.prgram = ['\xff'] * 0x2000
 
         # getting startup state from here:
         # http://forums.nesdev.com/viewtopic.php?t=3665

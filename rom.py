@@ -46,7 +46,7 @@ class NESRom(object):
         if ord(header[6]) & 2:
             notimp("Can't read ROM file with trainer")
         if ord(header[6]) & 9: # 0b1001
-            notimp("Only horizontal mirroring implemented")    
+            print >> sys.stderr, "WARNING: vertical mirroring not implemented"
         
         print "Flags 7 (unimplemented): %s" % format(ord(header[7]), '08b')
 

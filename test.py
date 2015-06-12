@@ -8,7 +8,8 @@ import time
 # ROMFILE = 'nestest.nes'
 # STARTADDR = 0xC000
 
-ROMFILE = 'instr_test-v4/official_only.nes'
+#ROMFILE = 'instr_test-v4/official_only.nes'
+ROMFILE = 'instr_test-v4/rom_singles/01-basics.nes'
 STARTADDR = None
 
 # ROMFILE = 'donkeykong.nes'
