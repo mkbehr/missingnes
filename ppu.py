@@ -1,6 +1,6 @@
 import sys
 
-PPU_DEBUG = False
+PPU_DEBUG = True
 
 SCANLINES = 262
 VISIBLE_SCANLINES = 240
@@ -34,7 +34,7 @@ class PPU(object):
         # don't think that's worth emulating
         self.latch = 0x0
 
-        self.oam = ['\x00'] * OAM_SIZE
+        self.oam = ['\x00' for i in range(OAM_SIZE)]
 
         ## PPUCTRL flags
         
@@ -216,8 +216,8 @@ class PPU(object):
 
             nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
             # double-check this:
-            ptabEntry = ord(self.cpu.mem.ppuRead(
-                nametable + tilecolumn + tilerow * 256))
+            ptabAddr = nametable + tilecolumn + tilerow * 32
+            ptabEntry = ord(self.cpu.mem.ppuRead(ptabAddr))
             # and now ptabEntry is (probably) bits 4 through b of the
             # pattern table address, at which point we just need to
             # set bits 0-3 and c as described below
@@ -245,6 +245,10 @@ class PPU(object):
                 (self.bgPatternTableAddr << 12)) # 12: pattern table base
             highplane = lowplane | 8 # set bit 3 for high dataplane
             #print "loading pattern table entry at %x" % lowplane
+            # if row % 8 == 0 and column % 8 == 0:
+            #     print "(%d,%d) sees nametable tile with value %x at %x and lowplane %x" % (
+            #         column, row, ptabEntry, ptabAddr, lowplane) # DEBUG
+
 
             finex = column % 8
             

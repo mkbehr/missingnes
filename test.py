@@ -83,5 +83,9 @@ def itMessage():
     end = c.mem.prgram[start:].index('\x00') + start
     return ''.join(c.mem.prgram[start:end])
 
+def step():
+    c.tick()
+    c.printState()
+
 if __name__ == "__main__":
     run()        
