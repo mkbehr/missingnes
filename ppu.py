@@ -111,7 +111,7 @@ class PPU(object):
             if PPU_DEBUG:
                 print >> sys.stderr, 'Warning: read from OAMADDR'
         elif register == REG_OAMDATA:
-            raise NotImplementedError("OAMDATA register not implemented")
+            self.latch = ord(self.oam[self.oamaddr])
         elif register == REG_PPUSCROLL:
             if PPU_DEBUG:
                 print >> sys.stderr, 'Warning: read from PPUSCROLL'
@@ -152,7 +152,8 @@ class PPU(object):
         elif register == REG_OAMADDR:
             self.oamaddr = val
         elif register == REG_OAMDATA:
-            raise NotImplementedError("OAMDATA register not implemented")
+            self.oam[self.oamaddr] = chr(val)
+            self.oamaddr = (self.oamaddr + 1) % OAM_SIZE
         elif register == REG_PPUSCROLL:
             if self.nextScroll == 0:
                 self.scrollX = val
