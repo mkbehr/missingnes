@@ -456,15 +456,16 @@ opFamily("ASL", op_asl,
 
 def op_rol(instr, cpu):
     # Rotate memory or accumulator one bit left, placing old bit 7 in
-    # new bit 0
+    # carry flag and carry flag in new bit 0
     if instr.opcode.addrMode == AM.imp:
         input = cpu.reg_A
     else:
         input = ord(instr.readMem(cpu))
     output = (input << 1) & 0xff
-    if input & 0x80:
-        output |= 0x1
+    if cpu.flag(c.FLAG_C):
+        output |= 0x01
     cpu.mathFlags(output)
+    cpu.setFlag(c.FLAG_C, input & 0x80)
     if instr.opcode.addrMode == AM.imp:
         cpu.reg_A = output
     else:
@@ -499,15 +500,16 @@ opFamily("LSR", op_lsr,
 
 def op_ror(instr, cpu):
     # Rotate memory or accumulator one bit right, placing old bit 0 in
-    # new bit 7
+    # carry flag and carry flag in new bit 7
     if instr.opcode.addrMode == AM.imp:
         input = cpu.reg_A
     else:
         input = ord(instr.readMem(cpu))
     output = input >> 1
-    if input & 0x01:
+    if cpu.flag(c.FLAG_C):
         output |= 0x80
     cpu.mathFlags(output)
+    cpu.setFlag(c.FLAG_C, input & 0x01)
     if instr.opcode.addrMode == AM.imp:
         cpu.reg_A = output
     else:
