@@ -117,7 +117,7 @@ class CPU(object):
         instruction = opc.Instruction.fromAddr(self.PC, self)
         self.PC = instruction.nextaddr
         instruction.call(self)
-        # self.printState()
+        self.printState()
 
     def tick(self):
         self.ppu.ppuTick()
