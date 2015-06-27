@@ -56,6 +56,11 @@ class CPU(object):
 
         self.ppu = ppu.PPU(self)
 
+        # Cycles for the PPU to catch up on. (When the CPU executes a
+        # cycle, this goes up by the cycle count. When the PPU
+        # executes a PPU cycle, this goes down by 3.)
+        self.excessCycles = 0
+
         # Now that everything is set up, simulate the RST signal.
         # If we ever track frames, this will affect those.
         self.PC = self.mem.dereference(mem.VEC_RST)
@@ -117,9 +122,13 @@ class CPU(object):
         self.currentInstruction = self.PC
         instr = opc.instrFromAddr(self.PC, self)
         self.PC = instr.nextaddr
+        # TODO this next line can't account for variable cycle counts
+        self.excessCycles += instr.cycles
         instr.call(self)
         # self.printState()
 
     def tick(self):
-        self.ppu.ppuTick()
+        while self.excessCycles >= 3:
+            self.ppu.ppuTick()
+            self.excessCycles -= 3
         self.cpuTick()

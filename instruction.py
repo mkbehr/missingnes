@@ -76,6 +76,7 @@ class Instruction(object):
         self.opcode = opcode
         self.addrData = addrData
         self.rawBytes = rawBytes
+        self.cycles = self.opcode.baseCycles + ADDR_MODE_CYCLES[self.opcode.addrMode]
 
     @property
     def size(self):
