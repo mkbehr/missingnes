@@ -32,6 +32,7 @@ class Memory(object):
         self.ram = ['\xff'] * RAM_SIZE
         self.ppuram = ['\x00'] * PPU_RAM_SIZE
         self.prgram = ['\x00'] * PRG_RAM_SIZE
+        self.instructionCache = {} # for NROM, this is never invalidated
 
     def readMany(self, address, nbytes):
         out = ""
@@ -175,6 +176,10 @@ class Memory(object):
         else:
             raise RuntimeError("PPU write address out of range: %x" % address)
 
+    def isRom(self, address):
+        """Returns true if the given address is read-only."""
+        return address >= 0x8000
+
 class MMC1(Memory):
     # TODO properly structure these classes - right now I'm mostly
     # copy-pasting
@@ -297,4 +302,7 @@ class MMC1(Memory):
 
     def ppuWrite(self, address, val):
         return # DEBUG
+        raise NotImplementedError()
+
+    def isRom(self, address):
         raise NotImplementedError()

@@ -59,7 +59,6 @@ class Instruction(object):
         self.opcode = opcode
         self.addrData = addrData
         self.rawBytes = rawBytes
-        self.memAddrCache = None
 
     @property
     def size(self):
@@ -72,13 +71,8 @@ class Instruction(object):
         return self.addr + self.size
 
     def memAddr(self, cpu):
-        """Get the memory address to be written to or read from, using an
-        instance-specific cache. We assume an instruction instance
-        will never change its memory address.
-        """
-        if self.memAddrCache is None:
-            self.memAddrCache = self.computeMemAddr(cpu)
-        return self.memAddrCache
+        """Currently just an alias for computeMemAddr."""
+        return self.computeMemAddr(cpu)
 
     def computeMemAddr(self, cpu):
         """Returns the memory address to be written to or read from. This will

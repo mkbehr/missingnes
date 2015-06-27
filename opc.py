@@ -5,6 +5,25 @@ import mem
 AM = instruction.AddrMode
 
 def instrFromAddr(address, cpu):
+    m = cpu.mem
+    if m.isRom(address):
+        if address not in m.instructionCache:
+            out = fetchInstrFromAddr(address, cpu)
+            m.instructionCache[address] = out
+        else:
+            out = m.instructionCache[address]
+        return out
+    else:
+        return fetchInstrFromAddr
+
+def fetchInstrFromAddr(address, cpu):
+    # What would be nice to do here is cache instructions in a big
+    # dictionary. Actually that should be fine. We just have to ask
+    # the memory module whether the memory address is ROM, and cache
+    # it if so. In that case, we need to kill the per-instance memory
+    # address cache for now. We also /eventually/ need to worry about
+    # what to do when the memory mapper swaps pages, but for now we're
+    # just worrying about the NROM mapper which doesn't do that.
     code = opcodeLookup(ord(cpu.mem.read(address)))
     rawBytes = cpu.mem.readMany(address, nbytes = code.addrSize+1)
     addrData = rawBytes[1:]
