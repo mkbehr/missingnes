@@ -48,20 +48,22 @@ def opcodeLookup(code):
     if code in opcodes:
         return opcodes[code]
     else:
-        return instruction.Opcode("ILLOP", op_illop, code, AM.imp)
+        return instruction.Opcode("ILLOP", op_illop, code, AM.imp, 2)
 
-def make_op(name, f, code, addrMode):
+def make_op(name, f, code, addrMode, baseCycles=2):
     # some sanchecking seems worthwhile
     assert code not in opcodes
     assert code >= 0x00
     assert code <= 0xff
-    opcodes[code] = instruction.Opcode(name, f, code, addrMode)
+    # JMP is special for whatever reason
+    assert (baseCycles >= 2 or name == "JMP")
+    opcodes[code] = instruction.Opcode(name, f, code, addrMode, baseCycles)
 
-def opFamily(name, f, *args):
+def opFamily(name, f, baseCycles, *args):
     if (len(args) % 2):
         raise RuntimeError("opFamily needs an even number of args")
     for i in range(len(args)/2):
-        make_op(name, f, args[2*i], args[(2*i)+1])    
+        make_op(name, f, args[2*i], args[(2*i)+1], baseCycles)
 
 ## Begin opcode listing
 # see http://www.oxyron.de/html/opcodes02.html
@@ -72,7 +74,7 @@ def op_ora(instr, cpu):
     out = cpu.reg_A | memval
     cpu.reg_A = out
     cpu.mathFlags(out)
-opFamily("ORA", op_ora,
+opFamily("ORA", op_ora, 2,
          0x09, AM.imm,
          0x05, AM.zp,
          0x15, AM.zpx,
@@ -87,7 +89,7 @@ def op_and(instr, cpu):
     out = cpu.reg_A & memval
     cpu.reg_A = out
     cpu.mathFlags(out)
-opFamily("AND", op_and,
+opFamily("AND", op_and, 2,
          0x29, AM.imm,
          0x25, AM.zp,
          0x35, AM.zpx,
@@ -102,7 +104,7 @@ def op_eor(instr, cpu):
     out = cpu.reg_A ^ memval
     cpu.reg_A = out
     cpu.mathFlags(out)
-opFamily("EOR", op_eor,
+opFamily("EOR", op_eor, 2,
          0x49, AM.imm,
          0x45, AM.zp,
          0x55, AM.zpx,
@@ -138,7 +140,7 @@ def op_adc(instr, cpu):
                 (result & 0x80) != (oldA & 0x80))
     cpu.reg_A = result
     cpu.mathFlags(result)
-opFamily("ADC", op_adc,
+opFamily("ADC", op_adc, 2,
          0x69, AM.imm,
          0x65, AM.zp,
          0x75, AM.zpx,
@@ -167,7 +169,7 @@ def op_sbc(instr, cpu):
                 (result & 0x80) != (oldA & 0x80))
     cpu.reg_A = result
     cpu.mathFlags(result)
-opFamily("SBC", op_sbc,
+opFamily("SBC", op_sbc, 2,
          0xE9, AM.imm,
          0xE5, AM.zp,
          0xF5, AM.zpx,
@@ -187,7 +189,7 @@ def cmpHelper(a, b, cpu):
 
 def op_cmp(instr, cpu):
     cmpHelper(cpu.reg_A, ord(instr.readMem(cpu)), cpu)
-opFamily("CMP", op_cmp,
+opFamily("CMP", op_cmp, 2,
          0xC9, AM.imm,
          0xC5, AM.zp,
          0xD5, AM.zpx,
@@ -199,14 +201,14 @@ opFamily("CMP", op_cmp,
 
 def op_cpx(instr, cpu):
     cmpHelper(cpu.reg_X, ord(instr.readMem(cpu)), cpu)
-opFamily("CPX", op_cpx,
+opFamily("CPX", op_cpx, 2,
          0xE0, AM.imm,
          0xE4, AM.zp,
          0xEC, AM.abs)
 
 def op_cpy(instr, cpu):
     cmpHelper(cpu.reg_Y, ord(instr.readMem(cpu)), cpu)
-opFamily("CPY", op_cpy,
+opFamily("CPY", op_cpy, 2,
          0xC0, AM.imm,
          0xC4, AM.zp,
          0xCC, AM.abs)
@@ -217,7 +219,7 @@ def op_dec(instr, cpu):
         val = 0xff
     instr.writeMem(val, cpu)
     cpu.mathFlags(val)
-opFamily("DEC", op_dec,
+opFamily("DEC", op_dec, 4,
          0xC6, AM.zp,
          0xD6, AM.zpx,
          0xCE, AM.abs,
@@ -245,7 +247,7 @@ def op_inc(instr, cpu):
         val = 0
     instr.writeMem(val, cpu)
     cpu.mathFlags(val)
-opFamily("INC", op_inc,
+opFamily("INC", op_inc, 4,
          0xE6, AM.zp,
          0xF6, AM.zpx,
          0xEE, AM.abs,
@@ -282,8 +284,8 @@ def op_asl(instr, cpu):
         cpu.reg_A = output
     else:
         instr.writeMem(output, cpu)
-opFamily("ASL", op_asl,
-         0x0A, AM.imp,
+make_op("ASL", op_asl, 0x0A, AM.imp)
+opFamily("ASL", op_asl, 4,
          0x06, AM.zp,
          0x16, AM.zpx,
          0x0E, AM.abs,
@@ -305,8 +307,8 @@ def op_rol(instr, cpu):
         cpu.reg_A = output
     else:
         instr.writeMem(output, cpu)
-opFamily("ROL", op_rol,
-         0x2A, AM.imp,
+make_op("ROL", op_rol, 0x2A, AM.imp)
+opFamily("ROL", op_rol, 4,
          0x26, AM.zp,
          0x36, AM.zpx,
          0x2E, AM.abs,
@@ -326,8 +328,8 @@ def op_lsr(instr, cpu):
         cpu.reg_A = output
     else:
         instr.writeMem(output, cpu)
-opFamily("LSR", op_lsr,
-         0x4A, AM.imp,
+make_op("LSR", op_lsr, 0x4A, AM.imp)
+opFamily("LSR", op_lsr, 4,
          0x46, AM.zp,
          0x56, AM.zpx,
          0x4E, AM.abs,
@@ -349,8 +351,8 @@ def op_ror(instr, cpu):
         cpu.reg_A = output
     else:
         instr.writeMem(output, cpu)
-opFamily("ROR", op_ror,
-         0x6A, AM.imp,
+make_op("ROR", op_ror, 0x6A, AM.imp)
+opFamily("ROR", op_ror, 4,
          0x66, AM.zp,
          0x76, AM.zpx,
          0x6E, AM.abs,
@@ -362,7 +364,7 @@ def op_lda(instr, cpu):
     val = ord(instr.readMem(cpu))
     cpu.reg_A = val
     cpu.mathFlags(val)
-opFamily("LDA", op_lda,
+opFamily("LDA", op_lda, 2,
          0xA9, AM.imm,
          0xA5, AM.zp,
          0xB5, AM.zpx,
@@ -374,7 +376,7 @@ opFamily("LDA", op_lda,
 
 def op_sta(instr, cpu):
     instr.writeMem(cpu.reg_A, cpu)
-opFamily("STA", op_sta,
+opFamily("STA", op_sta, 2,
          0x85, AM.zp,
          0x95, AM.zpx,
          0x81, AM.izx,
@@ -387,7 +389,7 @@ def op_ldx(instr, cpu):
     val = ord(instr.readMem(cpu))
     cpu.reg_X = val
     cpu.mathFlags(val)
-opFamily("LDX", op_ldx,
+opFamily("LDX", op_ldx, 2,
          0xA2, AM.imm,
          0xA6, AM.zp,
          0xB6, AM.zpy,
@@ -396,7 +398,7 @@ opFamily("LDX", op_ldx,
 
 def op_stx(instr, cpu):
     instr.writeMem(cpu.reg_X, cpu)
-opFamily("STX", op_stx,
+opFamily("STX", op_stx, 2,
          0x86, AM.zp,
          0x96, AM.zpy,
          0x8E, AM.abs)
@@ -405,7 +407,7 @@ def op_ldy(instr, cpu):
     val = ord(instr.readMem(cpu))
     cpu.reg_Y = val
     cpu.mathFlags(val)
-opFamily("LDY", op_ldy,
+opFamily("LDY", op_ldy, 2,
          0xA0, AM.imm,
          0xA4, AM.zp,
          0xB4, AM.zpx,
@@ -414,7 +416,7 @@ opFamily("LDY", op_ldy,
 
 def op_sty(instr, cpu):
     instr.writeMem(cpu.reg_Y, cpu)
-opFamily("STY", op_sty,
+opFamily("STY", op_sty, 2,
          0x84, AM.zp,
          0x94, AM.zpx,
          0x8C, AM.abs)
@@ -452,16 +454,16 @@ make_op("TXS", op_txs, 0x9A, AM.imp)
 def op_pla(instr, cpu):
     cpu.reg_A = ord(cpu.stackPop())
     cpu.mathFlags(cpu.reg_A)
-make_op("PLA", op_pla, 0x68, AM.imp)
+make_op("PLA", op_pla, 0x68, AM.imp, baseCycles = 4,)
 
 def op_pha(instr, cpu):
     cpu.stackPush(cpu.reg_A)
-make_op("PHA", op_pha, 0x48, AM.imp)
+make_op("PHA", op_pha, 0x48, AM.imp, baseCycles = 3)
 
 def op_plp(instr, cpu):
     cpu.flags = ord(cpu.stackPop())
     cpu.setFlag(c.FLAG_B, False)
-make_op("PLP", op_plp, 0x28, AM.imp)
+make_op("PLP", op_plp, 0x28, AM.imp, baseCycles = 4)
 
 def op_php(instr, cpu):
     # according to
@@ -469,7 +471,7 @@ def op_php(instr, cpu):
     # should set B to 1
     flagsToPush = cpu.flags | c.FLAG_B | c.FLAG_EXP
     cpu.stackPush(flagsToPush)
-make_op("PHP", op_php, 0x08, AM.imp)
+make_op("PHP", op_php, 0x08, AM.imp, baseCycles = 3)
 
 # Jump/flag commands
 
@@ -530,7 +532,7 @@ def op_brk(instr, cpu):
     cpu.stackPush(flagsToPush)
     cpu.setFlag(c.FLAG_I, True)
     cpu.PC = cpu.mem.dereference(mem.VEC_IRQ)
-make_op("BRK", op_brk, 0x00, AM.imp)
+make_op("BRK", op_brk, 0x00, AM.imp, baseCycles=7)
 
 def op_rti(instr, cpu):
     # pop flags, then PC
@@ -540,7 +542,7 @@ def op_rti(instr, cpu):
     pcHigh = ord(cpu.stackPop())
     oldpc = pcLow + (pcHigh << 8)
     cpu.PC = oldpc # this differs from RTS
-make_op("RTI", op_rti, 0x40, AM.imp)
+make_op("RTI", op_rti, 0x40, AM.imp, baseCycles=6)
 
 def op_jsr(instr, cpu):
     # Note: the spec says (PC + 1) -> PCL; (PC + 1) -> PCH, but it
@@ -555,7 +557,7 @@ def op_jsr(instr, cpu):
     cpu.stackPush(toPushHigh)
     cpu.stackPush(toPushLow)
     cpu.PC = instr.memAddr(cpu)
-make_op("JSR", op_jsr, 0x20, AM.abs)
+make_op("JSR", op_jsr, 0x20, AM.abs, baseCycles=4)
 
 def op_rts(instr, cpu):
     # Note: this is defined to pop the PC from the stack and add 1 to
@@ -564,11 +566,11 @@ def op_rts(instr, cpu):
     pcHigh = ord(cpu.stackPop())
     oldpc = pcLow + (pcHigh << 8)
     cpu.PC = oldpc + 1
-make_op("RTS", op_rts, 0x60, AM.imp)
+make_op("RTS", op_rts, 0x60, AM.imp, baseCycles=6)
 
 def op_jmp(instr, cpu):
     cpu.PC = instr.memAddr(cpu)
-opFamily("JMP", op_jmp,
+opFamily("JMP", op_jmp, 1,
          0x4C, AM.abs,
          0x6C, AM.ind)
 
@@ -578,7 +580,7 @@ def op_bit(instr, cpu):
     cpu.setFlag(c.FLAG_V, mem & 0x40)
     cpu.setFlag(c.FLAG_N, mem & 0x80)
     cpu.setFlag(c.FLAG_Z, not (mem & cpu.reg_A))
-opFamily("BIT", op_bit,
+opFamily("BIT", op_bit, 2,
          0x24, AM.zp,
          0x2C, AM.abs)
 

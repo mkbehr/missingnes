@@ -33,15 +33,32 @@ ADDR_MODE_LENGTHS = {
     AM.aby : 2,
     AM.ind : 2,
     AM.rel : 1,
-    }
+}
+
+# Number of extra cycles taken to use a cycle.
+ADDR_MODE_CYCLES = {
+    AM.imp: 0,
+    AM.imm: 0,
+    AM.zp : 1,
+    AM.zpx : 2,
+    AM.zpy : 2,
+    AM.izx : 4,
+    AM.izy : 3, # TODO extra cycle for page crossing
+    AM.abs : 2,
+    AM.abx : 2, # TODO extra cycle for page crossing
+    AM.aby : 2, # TODO extra cycle for page crossing
+    AM.ind : 4,
+    AM.rel : 0, # TODO +1 if branch succeeds, +2 if to new page (so is that +2 or +3 total?)
+}
 
 class Opcode(object):
 
-    def __init__(self, name, f, code, addrMode):
+    def __init__(self, name, f, code, addrMode, baseCycles):
         self.name = name
         self.f = f
         self.code = code
         self.addrMode = addrMode
+        self.baseCycles = baseCycles
 
     @property
     def addrSize(self):
