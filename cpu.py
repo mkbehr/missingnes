@@ -1,3 +1,4 @@
+import instruction
 import mem
 import opc
 import ppu
@@ -88,8 +89,8 @@ class CPU(object):
     def printState(self):
         print ("A = %02x X = %02x Y = %02x SP=%02x flags = %02x PC = %04x" %
                (self.reg_A, self.reg_X, self.reg_Y, self.SP, self.flags, self.PC))
-        instruction = opc.Instruction.fromAddr(self.PC, self)
-        print instruction.disassemble()
+        instr = opc.instrFromAddr(self.PC, self)
+        print instr.disassemble()
 
     def interrupt(self, vector):
         # much like the BRK opcode, but we don't set the B flag, and
@@ -114,9 +115,9 @@ class CPU(object):
             self.irqPending = False
         # TODO also process RST here (if I feel like it)
         self.currentInstruction = self.PC
-        instruction = opc.Instruction.fromAddr(self.PC, self)
-        self.PC = instruction.nextaddr
-        instruction.call(self)
+        instr = opc.instrFromAddr(self.PC, self)
+        self.PC = instr.nextaddr
+        instr.call(self)
         # self.printState()
 
     def tick(self):

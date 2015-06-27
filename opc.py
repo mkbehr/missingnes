@@ -1,207 +1,23 @@
 import cpu as c
+import instruction
 import mem
-import struct
 
-from enum import Enum
-from warnings import warn
+AM = instruction.AddrMode
 
-class AddrMode(Enum):
-    imp = 1 # implicit
-    imm = 2 # immediate
-    zp = 3 # zero page
-    zpx = 4 # zero page, X
-    zpy = 5 # zero page, Y
-    izx = 6 # indirect, X
-    izy = 7 # indirect, Y
-    abs = 8 # absolute
-    abx = 9 # absolute, X
-    aby = 10 # absolute, Y
-    ind = 11 # indexed
-    rel = 12 # relative
+def instrFromAddr(address, cpu):
+    code = opcodeLookup(ord(cpu.mem.read(address)))
+    rawBytes = cpu.mem.readMany(address, nbytes = code.addrSize+1)
+    addrData = rawBytes[1:]
+    return instruction.Instruction.makeInstr(address, code, addrData, rawBytes)
 
-AM = AddrMode
-
-# Length of specifiers for address mode. Instruction length is this + 1.
-ADDR_MODE_LENGTHS = {
-    AM.imp : 0,
-    AM.imm : 1,
-    AM.zp : 1,
-    AM.zpx : 1,
-    AM.zpy : 1,
-    AM.izx : 1,
-    AM.izy : 1,
-    AM.abs : 2,
-    AM.abx : 2,
-    AM.aby : 2,
-    AM.ind : 2,
-    AM.rel : 1,
-    }
-
-class Opcode(object):
-
-    def __init__(self, name, f, code, addrMode):
-        self.name = name
-        self.f = f
-        self.code = code
-        self.addrMode = addrMode
-
-    @property
-    def addrSize(self):
-        return ADDR_MODE_LENGTHS[self.addrMode]
-
-    @property
-    def size(self):
-        return 1 + self.addrSize
-
-class Instruction(object):
-    
-    def __init__(self, addr, opcode, addrData, rawBytes):
-        self.addr = addr
-        self.opcode = opcode
-        self.addrData = addrData
-        self.rawBytes = rawBytes
-
-    @property
-    def size(self):
-        return self.opcode.size
-
-    @property
-    def nextaddr(self):
-        """The address of the next instruction (by listing; doesn't take
-        jumps into account)."""
-        return self.addr + self.size
-
-    def memAddr(self, cpu):
-        """Returns the memory address to be written to or read from. This will
-        depend on the addressing mode."""
-        # see http://wiki.nesdev.com/w/index.php/CPU_addressing_modes
-        
-        # we convert endianness here
-        am = self.opcode.addrMode
-        if am == AM.imp:
-            warn("Trying to access memory for implicit-addressing instruction")
-            return None
-        elif am == AM.imm:
-            return self.addr + 1
-        elif am == AM.zp:
-            return ord(self.addrData) # address high byte is zero (hence "zero page")
-        elif am == AM.zpx:
-            return (ord(self.addrData) + cpu.reg_X) % 256
-        elif am == AM.zpy:
-            return (ord(self.addrData) + cpu.reg_Y) % 256
-        # can't use the dereference utility function for this because
-        # we have to stay in the zero page
-        elif am == AM.izx:
-            pointer = (ord(self.addrData) + cpu.reg_X) % 256
-            addrLow = ord(cpu.mem.read(pointer))
-            addrHigh = ord(cpu.mem.read((pointer + 1) % 256))
-            return addrLow + addrHigh * 256
-        elif am == AM.izy:
-            pointer = ord(self.addrData)
-            addrLow = ord(cpu.mem.read(pointer))
-            addrHigh = ord(cpu.mem.read((pointer + 1) % 256))
-            return (addrLow + addrHigh * 256 + cpu.reg_Y) & 0xffff
-        # remember little-endian from here on
-        elif am == AM.abs:
-            return struct.unpack('H', self.addrData)[0]
-        elif am == AM.abx:
-            offset = struct.unpack('H', self.addrData)[0]
-            return (offset + cpu.reg_X) & 0xffff
-        elif am == AM.aby:
-            offset = struct.unpack('H', self.addrData)[0]
-            return (offset + cpu.reg_Y) & 0xffff
-        elif am == AM.ind:
-            pointer = struct.unpack('H', self.addrData)[0]
-            addrLow = ord(cpu.mem.read(pointer))
-            # 6502 bug? see http://forums.nesdev.com/viewtopic.php?t=5388
-            addrHighLoc = pointer + 1
-            if (addrHighLoc & 0xff00) != (pointer & 0xff00):
-                addrHighLoc -= 0x100
-            addrHigh = ord(cpu.mem.read(addrHighLoc))
-            return addrLow + addrHigh * 256
-        elif am == AM.rel:
-            # Here addrData is a signed integer that represents an
-            # offest from the address we'll reach after the
-            # instruction, at least as far as I can tell. No endianness to worry about.
-            offset = struct.unpack('b', self.addrData)[0]
-            target = self.addr + offset + 2 # lol computers
-            return target
-        else:
-            raise RuntimeError("Unrecognized addressing mode")
-
-    def readMem(self, cpu):
-        #print "reading %x" % ord(cpu.mem.read(self.memAddr(cpu))) # DEBUG
-        return cpu.mem.read(self.memAddr(cpu))
-
-    def writeMem(self, val, cpu):
-        #print "WRITING to %x" % self.memAddr(cpu) # DEBUG
-        cpu.mem.write(self.memAddr(cpu), val)
-
-    def call(self, cpu):
-        self.opcode.f(self, cpu)
-
-    def addrDataStr(self):
-        # This probably could have been shorter. Oh well.
-        am = self.opcode.addrMode
-        if am == AM.imp:
-            return ""
-        elif am == AM.imm:
-            return "#$%02x" % ord(self.addrData)
-        elif am == AM.zp:
-            return "$%02x" % ord(self.addrData)
-        elif am == AM.zpx:
-            return "$%02x, X" % ord(self.addrData)
-        elif am == AM.zpy:
-            return "$%02x, Y" % ord(self.addrData)
-        elif am == AM.izx:
-            return "($%02x, X)" % ord(self.addrData)
-        elif am == AM.izy:
-            return "($%02x), Y" % ord(self.addrData)
-        # remember little-endian from here on
-        elif am == AM.abs:
-            return "$%02x%02x" % (ord(self.addrData[1]),
-                                  ord(self.addrData[0]))
-        elif am == AM.abx:
-            return "$%02x%02x, X" % (ord(self.addrData[1]),
-                                     ord(self.addrData[0]))
-        elif am == AM.aby:
-            return "$%02x%02x, Y" % (ord(self.addrData[1]),
-                                     ord(self.addrData[0]))
-        elif am == AM.ind:
-            return "($%02x%02x)" % (ord(self.addrData[1]),
-                                    ord(self.addrData[0]))
-        elif am == AM.rel:
-            # here addrData is a signed integer that represents an
-            # offest from the address we'll reach after the
-            # instruction, at least as far as I can tell
-            offset = struct.unpack('b', self.addrData)[0]
-            target = self.addr + offset + 2 # no endianness to worry about
-            return "$%04x" % target
-        else:
-            raise RuntimeError("Unrecognized addressing mode")
-
-    def disassemble(self): # TODO print hex data here too
-        return "%04x:    %s %s    %s" % (self.addr,
-                                         self.opcode.name,
-                                         self.addrDataStr(),
-                                         str([hex(ord(b)) for b in self.rawBytes]))
-
-    @staticmethod
-    def fromAddr(address, cpu):
-        code = opcodeLookup(ord(cpu.mem.read(address)))
-        rawBytes = cpu.mem.readMany(address, nbytes = code.addrSize+1)
-        addrData = rawBytes[1:]
-        return Instruction(address, code, addrData, rawBytes)
-
-    @staticmethod
-    def listFromAddr(address, nops, cpu):
-        out = []
-        while nops:
-            op = Instruction.fromAddr(address, cpu)
-            out.append(op)
-            nops -= 1
-            address += op.size
-        return out
+def instrListFromAddr(address, nops, cpu):
+    out = []
+    while nops:
+        op = instrFromAddr(address, cpu)
+        out.append(op)
+        nops -= 1
+        address += op.size
+    return out
 
 opcodes = {}
 
@@ -213,14 +29,14 @@ def opcodeLookup(code):
     if code in opcodes:
         return opcodes[code]
     else:
-        return Opcode("ILLOP", op_illop, code, AM.imp)
+        return instruction.Opcode("ILLOP", op_illop, code, AM.imp)
 
 def make_op(name, f, code, addrMode):
     # some sanchecking seems worthwhile
     assert code not in opcodes
     assert code >= 0x00
     assert code <= 0xff
-    opcodes[code] = Opcode(name, f, code, addrMode)
+    opcodes[code] = instruction.Opcode(name, f, code, addrMode)
 
 def opFamily(name, f, *args):
     if (len(args) % 2):

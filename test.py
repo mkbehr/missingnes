@@ -1,4 +1,5 @@
 import cpu
+import instruction
 import mem
 import opc
 import rom
@@ -21,8 +22,8 @@ c = cpu.CPU(prgrom = nestestrom.prgrom,
             chrrom = nestestrom.chrrom,
             mapper = nestestrom.mapper)
 startaddr = c.mem.dereference(mem.VEC_RST)
-startop = opc.Instruction.fromAddr(startaddr, c)
-firstops = opc.Instruction.listFromAddr(startaddr, 50, c)
+startop = opc.instrFromAddr(startaddr, c)
+firstops = opc.instrListFromAddr(startaddr, 50, c)
 firstassem = "\n".join([op.disassemble() for op in firstops])
 
 if STARTADDR is not None:
@@ -58,6 +59,13 @@ def runUntil(address):
     finally:
         print "Executed %d instructions." % instructions
 
+def runUntilFrame(frame):
+    instructions = 0
+    while c.ppu.frame < frame:
+        c.tick()
+        instructions += 1
+    print "Executed %d instructions." % instructions
+
 def showscreen():
     import numpy as np
     from matplotlib import pyplot as plt
@@ -85,6 +93,15 @@ def itMessage():
 
 def step():
     c.tick()
+    c.printState()
+
+def reset():
+    global c
+    c = cpu.CPU(prgrom = nestestrom.prgrom,
+                chrrom = nestestrom.chrrom,
+                mapper = nestestrom.mapper)
+    if STARTADDR is not None:
+        c.PC = STARTADDR
     c.printState()
 
 if __name__ == "__main__":
