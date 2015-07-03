@@ -80,6 +80,10 @@ class PPU(object):
         self.addrLow = 0
         self.nextAddr = 0 # 0 for high, 1 for low
 
+        ## Background tile caches
+        self.bglowbyte = 0
+        self.bghighbyte = 0
+
         self.screenarray = np.zeros((VISIBLE_COLUMNS, VISIBLE_SCANLINES), dtype='uint8')
 
         from screen import Screen # herp derp circular import
@@ -217,48 +221,53 @@ class PPU(object):
             tilerow = row / 8
             tilecolumn = column / 8
 
-            nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
-            # double-check this:
-            ptabAddr = nametable + tilecolumn + tilerow * 32
-            ptabEntry = ord(self.cpu.mem.ppuRead(ptabAddr))
-            # and now ptabEntry is (probably) bits 4 through b of the
-            # pattern table address, at which point we just need to
-            # set bits 0-3 and c as described below
-            
-            # finding pattern table entry:
-            #
-            # bits 0 through 2 are the "fine y offset", the y position
-            # within a tile (y position % 8, I guess)
-            #
-            # bit 3 is the bitplane: we'll need to read once with it
-            # set and once with it unset to get two bits of color
-            #
-            # bits 4 through 7 are the column of the tile (column / 8)
-            #
-            # bits 8 through b are the tile row (row / 8)
-            #
-            # bit c is the same as self.bgPatternTableAddr
-            #
-            # bits d through f are 0 (pattern tables go from 0000 to 1fff)
+            # If we're at the start of a tile, refresh our cache. We
+            # can pull 8 horizontally-continguous pixels at once; we
+            # have a low-plane byte with the low-plane bits for 8
+            # pixels, and a high-plane byte with the high-plane bits
+            # for the same 8 pixels.
+            if (column % 8) == 0:
 
-            lowplane = (
-                (row % 8) + # 0-2: fine y offset
-                (0 << 3) + # 3: dataplane
-                (ptabEntry << 4) + # 4-11: column and row (double-check)
-                (self.bgPatternTableAddr << 12)) # 12: pattern table base
-            highplane = lowplane | 8 # set bit 3 for high dataplane
-            #print "loading pattern table entry at %x" % lowplane
-            # if row % 8 == 0 and column % 8 == 0:
-            #     print "(%d,%d) sees nametable tile with value %x at %x and lowplane %x" % (
-            #         column, row, ptabEntry, ptabAddr, lowplane) # DEBUG
+                nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
+                # double-check this:
+                ptabAddr = nametable + tilecolumn + tilerow * 32
+                ptabEntry = ord(self.cpu.mem.ppuRead(ptabAddr))
+                # and now ptabEntry is (probably) bits 4 through b of the
+                # pattern table address, at which point we just need to
+                # set bits 0-3 and c as described below
 
+                # finding pattern table entry:
+                #
+                # bits 0 through 2 are the "fine y offset", the y position
+                # within a tile (y position % 8, I guess)
+                #
+                # bit 3 is the bitplane: we'll need to read once with it
+                # set and once with it unset to get two bits of color
+                #
+                # bits 4 through 7 are the column of the tile (column / 8)
+                #
+                # bits 8 through b are the tile row (row / 8)
+                #
+                # bit c is the same as self.bgPatternTableAddr
+                #
+                # bits d through f are 0 (pattern tables go from 0000 to 1fff)
+
+                lowplane = (
+                    (row % 8) + # 0-2: fine y offset
+                    (0 << 3) + # 3: dataplane
+                    (ptabEntry << 4) + # 4-11: column and row (double-check)
+                    (self.bgPatternTableAddr << 12)) # 12: pattern table base
+                highplane = lowplane | 8 # set bit 3 for high dataplane
+
+                self.bglowbyte = ord(self.cpu.mem.ppuRead(lowplane))
+                self.bghighbyte = ord(self.cpu.mem.ppuRead(highplane))
 
             finex = column % 8
             # most significant bit is leftmost bit
             finexbit = 7 - finex
             
-            pixelbit0 = (ord(self.cpu.mem.ppuRead(lowplane)) >> finexbit) & 0x1
-            pixelbit1 = (ord(self.cpu.mem.ppuRead(highplane)) >> finexbit) & 0x1
+            pixelbit0 = (self.bglowbyte >> finexbit) & 0x1
+            pixelbit1 = (self.bghighbyte >> finexbit) & 0x1
             colorindex = pixelbit0 + pixelbit1 * 2
             # start by just interpreting colorindex as a grayscale
             # value from 0 (black) to 3 (white); eventually we will
