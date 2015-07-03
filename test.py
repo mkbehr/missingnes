@@ -66,7 +66,7 @@ def runUntilFrame(frame):
         instructions += 1
     print "Executed %d instructions." % instructions
 
-def showscreen():
+def showscreen(): # doesn't work under pypy
     import numpy as np
     from matplotlib import pyplot as plt
     img = 3 - np.array(c.ppu.screen).T
@@ -76,6 +76,23 @@ def showscreen():
     fig.axes.get_yaxis().set_visible(False)
     plt.savefig('screen.png', bbox_inches='tight', pad_inches = 0)
     plt.show()
+
+def pillowscreen():
+    from PIL import Image
+    import numpy as np
+
+    # a bit hacky, but this works for now
+    nparray = np.array(c.ppu.screen, dtype='float').T
+    nparray /= nparray.max()
+    npint = np.uint8(nparray * 255)
+    # np.ones doesn't work currently under pypy
+    imgarray = np.zeros(npint.shape + (4,), dtype='uint8')
+    imgarray[:,:,0] = npint
+    imgarray[:,:,1] = npint
+    imgarray[:,:,2] = npint
+    imgarray[:,:,3] += 255
+    img = Image.frombytes('RGBA', nparray.T.shape, imgarray.tobytes())
+    img.show() 
 
 def instrTest():
     while c.mem.prgram[0] != '\x80':
