@@ -85,13 +85,7 @@ def pillowscreen():
     nparray = np.array(c.ppu.screen, dtype='float').T
     nparray /= nparray.max()
     npint = np.uint8(nparray * 255)
-    # np.ones doesn't work currently under pypy
-    imgarray = np.zeros(npint.shape + (4,), dtype='uint8')
-    imgarray[:,:,0] = npint
-    imgarray[:,:,1] = npint
-    imgarray[:,:,2] = npint
-    imgarray[:,:,3] += 255
-    img = Image.frombytes('RGBA', nparray.T.shape, imgarray.tobytes())
+    img = Image.frombytes('L', nparray.T.shape, npint.tobytes())
     img.show() 
 
 def instrTest():
