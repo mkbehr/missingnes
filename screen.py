@@ -57,11 +57,10 @@ class Screen(object):
         # like we do now. Then we can speed it up.
 
         # a bit hacky, but this works for now
-        nparray = np.array(self.ppu.screen, dtype='float').T
-        nparray /= 3.0
-        npint = np.uint8(nparray * 255)
+        nparray = np.array(self.ppu.screen, dtype='uint8').T
+        nparray *= 85 # max value is 3; 3 * 85 = 255
 
-        raw_img = npint.tobytes()
+        raw_img = nparray.tobytes()
 
         pglimage = pyglet.image.ImageData(SCREEN_WIDTH, SCREEN_HEIGHT, 'L',
                                           raw_img, pitch= -SCREEN_WIDTH)
