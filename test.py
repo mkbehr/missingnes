@@ -108,6 +108,7 @@ def step():
 
 def reset():
     global c
+    c.ppu.pgscreen.window.close() # still doesn't seem to work
     c = cpu.CPU(prgrom = nestestrom.prgrom,
                 chrrom = nestestrom.chrrom,
                 mapper = nestestrom.mapper)

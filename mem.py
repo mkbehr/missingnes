@@ -124,19 +124,24 @@ class Memory(object):
         pointer = self.readMany(paddr, nbytes=2)
         return struct.unpack("<H", pointer)[0]
 
+    def ppuNametablePaddr(self, vaddr):
+        # assume horizontal mirroring for now
+        paddr = vaddr - 0x2000
+        # adjust paddr for horizontal mirroring
+        if (0x400 <= paddr < 0x800) or (0xc00 <= paddr < 0x1000):
+            paddr -= 0x400
+        # now remember that paddr 2400 lives at vaddr 2800
+        if 0x800 <= paddr:
+            paddr -= 0x800
+        return paddr
+
     def ppuRead(self, address):
         if 0 <= address < 0x2000:
             return self.cpu.chrrom[address]
         # assume horizontal mirroring for now.
         # TODO support switching depending on .nes file flags
         elif 0x2000 <= address < 0x3000:
-            paddr = address - 0x2000
-            # adjust paddr for horizontal mirroring
-            if (0x400 <= paddr < 0x800) or (0xc00 <= paddr < 0x1000):
-                paddr -= 0x400
-            # now remember that paddr 2400 lives at vaddr 2800
-            if 0x800 <= paddr:
-                paddr -= 0x800
+            paddr = self.ppuNametablePaddr(address)
             return self.ppuram[paddr]
         elif 0x3000 <= address < 0x3f00:
             # mirror memory at 0x2000
@@ -155,14 +160,20 @@ class Memory(object):
         if 0 <= address < 0x2000:
             raise RuntimeError("Can't write to CHR ROM")
         elif 0x2000 <= address < 0x3000:
-            # TODO don't duplicate mirroring code
-            paddr = address - 0x2000
-            # adjust paddr for horizontal mirroring
-            if (0x400 <= paddr < 0x800) or (0xc00 <= paddr < 0x1000):
-                paddr -= 0x400
-            # now remember that paddr 2400 lives at vaddr 2800
-            if 0x800 <= paddr:
-                paddr -= 0x800
+            paddr = self.ppuNametablePaddr(address)
+            # We're writing to a nametable byte, so invalidate the
+            # corresponding portion of the background cache. TODO:
+            # handle the fact that we might actually be writing to the
+            # other nametable.
+            ntabOffset = address & 0x3ff
+            tileX = ntabOffset % 32
+            tileY = ntabOffset / 32
+            # TODO we probably shouldn't be talking to the ppu
+            # directly here
+
+            # this might actually be part of the attribute table, but
+            # the ppu code will handle that
+            self.cpu.ppu.flushBgTile(tileX, tileY)
             self.ppuram[paddr] = val
         elif 0x3000 <= address < 0x3f00:
             # mirror memory at 0x2000

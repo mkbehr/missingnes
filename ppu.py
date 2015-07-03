@@ -84,6 +84,17 @@ class PPU(object):
         self.bglowbyte = 0
         self.bghighbyte = 0
 
+        # Whether or not to redraw a background tile. This will get
+        # messier once sprites exist; for now pretend they don't.
+        self.redrawtile = np.invert( # pypy doesn't like np.ones
+            np.zeros((VISIBLE_COLUMNS/8, VISIBLE_SCANLINES/8),
+                     dtype='bool'))
+        # The same thing but for next frame. (We want to fiddle with
+        # this before we're done drawing a given tile)
+        self.nextredrawtile = np.invert(
+                    np.zeros((VISIBLE_COLUMNS/8, VISIBLE_SCANLINES/8),
+                             dtype='bool'))
+
         self.screenarray = np.zeros((VISIBLE_COLUMNS, VISIBLE_SCANLINES), dtype='uint8')
 
         from screen import Screen # herp derp circular import
@@ -137,6 +148,9 @@ class PPU(object):
             val = ord(val)
         self.latch = val
         if register == REG_PPUCTRL:
+            oldNametableBase = self.nametableBase
+            oldBgPatternTableAddr = self.bgPatternTableAddr
+            
             self.nametableBase = val & 0x3 # bits 0,1
             self.vramInc = (val >> 2) & 0x1 # bit 2
             self.spritePatternTableAddr = (val >> 3) & 0x1 # bit 3
@@ -146,6 +160,11 @@ class PPU(object):
             self.vblankNMI = (val >> 7) & 0x1 # bit 7
             # TODO if we just set vblankNMI and we're in vblank, this
             # might be supposed to trigger the NMI
+
+            if (self.nametableBase != oldNametableBase or
+                self.bgPatternTableAddr != oldBgPatternTableAddr):
+                self.flushBgCache()
+            
             if self.ppuMasterSlave:
                 raise RuntimeError("We set the PPU master/slave bit! That's bad!")
         elif register == REG_PPUMASK:
@@ -162,6 +181,7 @@ class PPU(object):
             self.oam[self.oamaddr] = chr(val)
             self.oamaddr = (self.oamaddr + 1) % OAM_SIZE
         elif register == REG_PPUSCROLL:
+            # TODO once scrolling exists, this may affect cache
             if self.nextScroll == 0:
                 self.scrollX = val
                 self.nextScroll = 1
@@ -190,6 +210,12 @@ class PPU(object):
         self.ppuaddr &= 0xffff
 
     def ppuTick(self):
+        # TODO streamline calls to this as follows:
+        # - only do anything on certain ticks (if we can track where
+        #   sprites are, we can avoid redrawing most of the screen)
+        # - keep track of when we next have to do things
+        # - don't call ppuTick until then
+        
         if (self.scanline, self.cycle) == VBLANK_START:
             self.vblank = 1
             if self.vblankNMI:
@@ -198,17 +224,11 @@ class PPU(object):
         elif (self.scanline, self.cycle) == VBLANK_END:
             self.vblank = 0
 
-        # TODO if we're on a visible pixel, draw that pixel
-
-        # For now, we'll only draw backgrounds, and we'll just pay
-        # attention to each pixel as we get there. Also, we'll start
-        # by ignoring palettes and actual graphical output. We'll just
-        # make an array of numbers.
-
-        # TODO hmm, actually we may as well set a row of 8 pixels at a
-        # time here (at least for now)
-        if self.scanline < VISIBLE_SCANLINES and self.cycle < VISIBLE_COLUMNS:
-            # TODO grab data from nametable to find pattern table
+        # if we're on a visible pixel, draw that pixel, unless we're
+        # not redrawing it
+        if (self.scanline < VISIBLE_SCANLINES and self.cycle < VISIBLE_COLUMNS
+            and self.redrawtile[self.cycle/8, self.scanline/8]):
+            # Grab data from nametable to find pattern table
             # entry. There are 30*32 bytes in a pattern table, and
             # each byte corresponds to an 8*8-pixel tile. So I guess
             # those bytes are going to correspond to bits 4 through b
@@ -284,8 +304,39 @@ class PPU(object):
             self.scanline = (self.scanline + 1) % SCANLINES
             if self.scanline == 0:
                 self.frame += 1
+                # update our tiles to redraw: note that it's important
+                # that this happens here, right at the end of vblank,
+                # so that changes during vblank will be reflected
+                self.redrawtile = self.nextredrawtile
+                # now, cache everything unless we know otherwise
+                self.nextredrawtile = np.zeros((VISIBLE_COLUMNS/8,
+                                                VISIBLE_SCANLINES/8),
+                                               dtype='bool')
                 if PPU_DEBUG:
                     print "BEGIN PPU FRAME %d" % self.frame
                 self.pgscreen.tick()
         # TODO skip cycle 340 on scanline 239 on odd
         # frames... hahahaha no I don't care
+
+    def flushBgCache(self):
+        # Clear our background tile cache: we'll redraw the whole
+        # background next frame.
+        self.nextredrawtile = np.invert(
+            np.zeros((VISIBLE_COLUMNS/8, VISIBLE_SCANLINES/8),
+                     dtype='bool'))
+
+    def flushBgTile(self, tileX, tileY):
+        # Clear our background tile cache for a single tile. This
+        # should be called when we write to the PPU nametable address
+        # corresponding to our active nametable. For now I'm going to
+        # have the memory management code deal with that - that's
+        # going to involve some weird interplay between the two
+        # modules, so I might want to reorganize that eventually.
+
+        # first make sure we're not actually writing to the attribute table
+        if tileY < VISIBLE_SCANLINES / 8:
+            self.nextredrawtile[tileX, tileY] = True
+        else:
+            # if we are, just flush everything to be safe
+            self.flushBgCache()
+            pass
