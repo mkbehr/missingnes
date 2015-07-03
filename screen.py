@@ -60,9 +60,8 @@ class Screen(object):
         nparray = np.array(self.ppu.screen, dtype='float').T
         nparray /= 3.0
         npint = np.uint8(nparray * 255)
-        img = Image.frombytes('L', nparray.T.shape, npint.tobytes())
 
-        raw_img = img.tostring()
+        raw_img = npint.tobytes()
 
         pglimage = pyglet.image.ImageData(SCREEN_WIDTH, SCREEN_HEIGHT, 'L',
                                           raw_img, pitch= -SCREEN_WIDTH)
