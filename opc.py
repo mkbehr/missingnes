@@ -335,23 +335,30 @@ opFamily("LSR", op_lsr, 4,
          0x4E, AM.abs,
          0x5E, AM.abx)
 
-def op_ror(instr, cpu):
+# TODO: optimize other instructions similarly
+def op_ror_imp(instr, cpu):
     # Rotate memory or accumulator one bit right, placing old bit 0 in
-    # carry flag and carry flag in new bit 7
-    if instr.opcode.addrMode == AM.imp:
-        input = cpu.reg_A
-    else:
-        input = ord(instr.readMem(cpu))
+    # carry flag and carry flag in new bit 7. Use this for implicit
+    # addressing.
+    input = cpu.reg_A
     output = input >> 1
     if cpu.flag(c.FLAG_C):
         output |= 0x80
     cpu.mathFlags(output)
     cpu.setFlag(c.FLAG_C, input & 0x01)
-    if instr.opcode.addrMode == AM.imp:
-        cpu.reg_A = output
-    else:
-        instr.writeMem(output, cpu)
-make_op("ROR", op_ror, 0x6A, AM.imp)
+    cpu.reg_A = output
+def op_ror(instr, cpu):
+    # Rotate memory or accumulator one bit right, placing old bit 0 in
+    # carry flag and carry flag in new bit 7. Use this for all modes
+    # other than implicit addressing.
+    input = ord(instr.readMem(cpu))
+    output = input >> 1
+    if cpu.flag(c.FLAG_C):
+        output |= 0x80
+    cpu.mathFlags(output)
+    cpu.setFlag(c.FLAG_C, input & 0x01)
+    instr.writeMem(output, cpu)
+make_op("ROR", op_ror_imp, 0x6A, AM.imp)
 opFamily("ROR", op_ror, 4,
          0x66, AM.zp,
          0x76, AM.zpx,
