@@ -128,7 +128,9 @@ class CPU(object):
         # self.printState()
 
     def tick(self):
-        while self.excessCycles >= 3:
+        while self.excessCycles > 0:
             self.ppu.ppuTick()
-            self.excessCycles -= 3
+            self.ppu.ppuTick()
+            self.ppu.ppuTick()
+            self.excessCycles -= 1
         self.cpuTick()
