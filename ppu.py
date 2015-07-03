@@ -1,4 +1,5 @@
 import sys
+import numpy as np
 
 PPU_DEBUG = True
 
@@ -79,8 +80,7 @@ class PPU(object):
         self.addrLow = 0
         self.nextAddr = 0 # 0 for high, 1 for low
 
-        self.screen = [[-1 for y in range(VISIBLE_SCANLINES)]
-                       for x in range(VISIBLE_COLUMNS)]
+        self.screenarray = np.zeros((VISIBLE_COLUMNS, VISIBLE_SCANLINES), dtype='uint8')
 
         from screen import Screen # herp derp circular import
         self.pgscreen = Screen(self)
@@ -266,8 +266,9 @@ class PPU(object):
             
             # color = TODOrelevantgray(colorindex)
             # TODOdrawpixel(TODOrow, TODOcolumn, TODOcolor)
+            color = colorindex * 85 # convert to 0-255 grayscale for now
 
-            self.screen[column][row] = colorindex
+            self.screenarray[column,row] = color
             
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:
