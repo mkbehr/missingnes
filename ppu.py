@@ -82,6 +82,9 @@ class PPU(object):
         self.screen = [[-1 for y in range(VISIBLE_SCANLINES)]
                        for x in range(VISIBLE_COLUMNS)]
 
+        from screen import Screen # herp derp circular import
+        self.pgscreen = Screen(self)
+
     def readReg(self, register):
         # Set the latch, then return it. Write-only registers just set
         # the latch, but for now they also print an error message.
@@ -273,5 +276,6 @@ class PPU(object):
                 self.frame += 1
                 if PPU_DEBUG:
                     print "BEGIN PPU FRAME %d" % self.frame
+                self.pgscreen.tick()
         # TODO skip cycle 340 on scanline 239 on odd
         # frames... hahahaha no I don't care
