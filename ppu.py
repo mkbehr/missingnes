@@ -297,7 +297,7 @@ class PPU(object):
                         tileIndex = ord(self.oam[sprite_oam_base+1])
                         attributes = ord(self.oam[sprite_oam_base+2])
                         spriteX = ord(self.oam[sprite_oam_base+3])
-                        finey = self.scanline % 8 # row % 8
+                        finey = self.scanline - spritetop # row - spritetop
                         if attributes & 0x80: # vertical mirroring
                             finey = 7 - finey
                         horizontalMirror = bool(attributes & 0x40)
@@ -392,10 +392,11 @@ class PPU(object):
                     pixelbit0 = (spriteRow.lowcolor >> finexbit) & 0x1
                     pixelbit1 = (spriteRow.highcolor >> finexbit) & 0x1
                     colorindex = pixelbit0 + pixelbit1 * 2
-                    # TODO palette
-                    color = colorindex * 85 # convert to 0-255 grayscale for now
-                    # TODO respect priority
-                    self.screenarray[column,row] = color
+                    if colorindex != 0: # 0 is always transparent
+                        # TODO palette
+                        color = colorindex * 85 # convert to 0-255 grayscale for now
+                        # TODO respect priority
+                        self.screenarray[column,row] = color
             
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:
