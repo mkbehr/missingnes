@@ -6,6 +6,7 @@ have more separation?)
 """
 
 import pyglet
+from pyglet.window import key
 
 from PIL import Image
 import numpy as np
@@ -38,6 +39,9 @@ class Screen(object):
         self.window = pyglet.window.Window(width=SCREEN_WIDTH, height=SCREEN_HEIGHT)
         self.window.on_draw = self.on_draw
 
+        self.keys = key.KeyStateHandler()
+        self.window.push_handlers(self.keys)
+
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         pyglet.clock.tick()
 
@@ -47,11 +51,26 @@ class Screen(object):
             window.dispatch_event('on_draw')
             window.flip()
 
-        if frame == 10: # DEBUG
-            # forgive me demeter for I have sinned
-            self.ppu.cpu.controller.inputState.states[3] = True
-        else:
-            self.ppu.cpu.controller.inputState.states[3] = False
+        # Handle controller input.
+
+        # TODO: use fewer magic numbers and put together a proper
+        # structure for this code.
+
+        # forgive me demeter for I have sinned
+        ips = self.ppu.cpu.controller.inputState.states
+
+        # TODO: instead of just tracking keys, consider making sure
+        # that when the user presses a button, that button is pressed
+        # in the next frame, even if it's released before the frame is
+        # processed.
+        ips[0] = self.keys[key.A] # A
+        ips[1] = self.keys[key.S] # B
+        ips[2] = self.keys[key.BACKSLASH] # select: mapping to \ for now
+        ips[3] = (self.keys[key.ENTER] or self.keys[key.RETURN]) # start
+        ips[4] = self.keys[key.UP]
+        ips[5] = self.keys[key.DOWN]
+        ips[6] = self.keys[key.LEFT]
+        ips[7] = self.keys[key.RIGHT]
 
     def on_draw(self):
         # Background: draw each background tile.
