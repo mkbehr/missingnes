@@ -1,6 +1,8 @@
 import sys
 import numpy as np
 
+import sprite
+
 PPU_DEBUG = True
 
 SCANLINES = 262
@@ -21,6 +23,9 @@ REG_PPUADDR = 6
 REG_PPUDATA = 7
 
 OAM_SIZE = 256
+OAM_ENTRY_SIZE = 4
+
+MAX_SPRITES = 8 # maximum number of sprites displayed per scanline
 
 class PPU(object):
 
@@ -80,6 +85,10 @@ class PPU(object):
         self.addrLow = 0
         self.nextAddr = 0 # 0 for high, 1 for low
 
+        ## Sprite-relevant state
+        self.spritesThisScanline = [None for i in range(MAX_SPRITES)]
+        self.nSpritesThisScanline = 0
+
         ## Background tile caches
         self.bglowbyte = 0
         self.bghighbyte = 0
@@ -129,6 +138,8 @@ class PPU(object):
             if PPU_DEBUG:
                 print >> sys.stderr, 'Warning: read from OAMADDR'
         elif register == REG_OAMDATA:
+            # TODO: if (oamaddr % 4) == 3, report that bits 2-4 are 0
+            # see http://wiki.nesdev.com/w/index.php/PPU_OAM
             self.latch = ord(self.oam[self.oamaddr])
         elif register == REG_PPUSCROLL:
             if PPU_DEBUG:
@@ -209,6 +220,43 @@ class PPU(object):
             self.ppuaddr += 32
         self.ppuaddr &= 0xffff
 
+    def readPtab(self, base, finey, tile):
+        """Read an entry from a pattern table.
+        Arguments:
+        - base: 0 or 1 corresponding to the pattern table base
+        - finey: Fine y offset. y position within the tile (0-7).
+        - tile: One byte determining the tile within the table."""
+        # finding pattern table entry:
+        #
+        # bits 0 through 2 are the "fine y offset", the y position
+        # within a tile (y position % 8, I guess)
+        #
+        # bit 3 is the bitplane: we'll need to read once with it
+        # set and once with it unset to get two bits of color
+        #
+        # bits 4 through 7 are the column of the tile (column / 8)
+        #
+        # bits 8 through b are the tile row (row / 8)
+        #
+        # bit c is the same as self.bgPatternTableAddr
+        #
+        # bits d through f are 0 (pattern tables go from 0000 to 1fff)
+
+        lowplane = (
+            (finey) + # 0-2: fine y offset
+            (0 << 3) + # 3: dataplane
+            (tile << 4) + # 4-11: column and row
+            (base << 12)) # 12: pattern table base
+        # bits d through f are 0 (pattern tables go from 0000 to 1fff)
+        assert ((lowplane & 8) == 0)
+        highplane = lowplane | 8 # set bit 3 for high dataplane
+
+        lowbyte = ord(self.cpu.mem.ppuRead(lowplane))
+        highbyte = ord(self.cpu.mem.ppuRead(highplane))
+
+        return (lowbyte,highbyte)
+
+
     def ppuTick(self):
         # TODO streamline calls to this as follows:
         # - only do anything on certain ticks (if we can track where
@@ -224,10 +272,54 @@ class PPU(object):
         elif (self.scanline, self.cycle) == VBLANK_END:
             self.vblank = 0
 
+        # If we're at the start of a visible scanline, determine which
+        # sprites we'll be drawing this line.
+        if self.scanline < VISIBLE_SCANLINES and self.cycle == 0:
+            # first reset state for the scanline
+            self.spriteOverflow = 0
+            self.spritesThisScanline = [None for i in range(MAX_SPRITES)]
+            self.nSpritesThisScanline = 0
+
+            # Now scan through OAM and find sprites to draw on this
+            # line. If this becomes slow, some indexing of oam could
+            # make it faster. But while testing, scanning through OAM
+            # once per scanline had negligible effect on speed.
+            for sprite_i in range(OAM_SIZE / OAM_ENTRY_SIZE):
+                sprite_oam_base = sprite_i * OAM_ENTRY_SIZE
+                # The first byte of a sprite's entry is one less than
+                # its y-coordinate. (This does mean that sprites can
+                # never be drawn on scanline 0.)
+                spritetop = ord(self.oam[sprite_oam_base]) + 1
+                # TODO account for 8x16 sprites
+                if self.scanline <= spritetop < (self.scanline + 8):
+                    if self.nSpritesThisScanline < MAX_SPRITES:
+                        # construct SpriteRow object
+                        spriteX = ord(self.oam[sprite_oam_base+3])
+                        tileIndex = ord(self.oam[sprite_oam_base+1])
+                        # TODO sprite attributes (byte 2)
+                        (lowcolor, highcolor) = self.readPtab(
+                            base = self.spritePatternTableAddr,
+                            finey = self.scanline % 8, # row % 8
+                            tile = tileIndex)
+                        spriteRow = sprite.SpriteRow(spriteX, lowcolor, highcolor)
+                        self.spritesThisScanline[self.nSpritesThisScanline] = spriteRow
+                        self.nSpritesThisScanline += 1
+                    else:
+                        # TODO emulate batshit behavior documented
+                        # here:
+                        # http://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
+                        self.spriteOverflow = 1
+
         # if we're on a visible pixel, draw that pixel, unless we're
         # not redrawing it
-        if (self.scanline < VISIBLE_SCANLINES and self.cycle < VISIBLE_COLUMNS
-            and self.redrawtile[self.cycle/8, self.scanline/8]):
+        if self.scanline < VISIBLE_SCANLINES and self.cycle < VISIBLE_COLUMNS:
+            # TODO: get tile caching to work with sprites. Once that
+            # works, we'll look at the value of
+            # self.redrawtile[self.cycle/8, self.scanline/8]
+            # to determine whether we need to redraw.
+
+            ## BACKGROUND
+            
             # Grab data from nametable to find pattern table
             # entry. There are 30*32 bytes in a pattern table, and
             # each byte corresponds to an 8*8-pixel tile. So I guess
@@ -247,40 +339,14 @@ class PPU(object):
             # pixels, and a high-plane byte with the high-plane bits
             # for the same 8 pixels.
             if (column % 8) == 0:
-
                 nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
                 # double-check this:
-                ptabAddr = nametable + tilecolumn + tilerow * 32
-                ptabEntry = ord(self.cpu.mem.ppuRead(ptabAddr))
-                # and now ptabEntry is (probably) bits 4 through b of the
-                # pattern table address, at which point we just need to
-                # set bits 0-3 and c as described below
-
-                # finding pattern table entry:
-                #
-                # bits 0 through 2 are the "fine y offset", the y position
-                # within a tile (y position % 8, I guess)
-                #
-                # bit 3 is the bitplane: we'll need to read once with it
-                # set and once with it unset to get two bits of color
-                #
-                # bits 4 through 7 are the column of the tile (column / 8)
-                #
-                # bits 8 through b are the tile row (row / 8)
-                #
-                # bit c is the same as self.bgPatternTableAddr
-                #
-                # bits d through f are 0 (pattern tables go from 0000 to 1fff)
-
-                lowplane = (
-                    (row % 8) + # 0-2: fine y offset
-                    (0 << 3) + # 3: dataplane
-                    (ptabEntry << 4) + # 4-11: column and row (double-check)
-                    (self.bgPatternTableAddr << 12)) # 12: pattern table base
-                highplane = lowplane | 8 # set bit 3 for high dataplane
-
-                self.bglowbyte = ord(self.cpu.mem.ppuRead(lowplane))
-                self.bghighbyte = ord(self.cpu.mem.ppuRead(highplane))
+                nametableEntry = nametable + tilecolumn + tilerow * 32
+                ptabTile = ord(self.cpu.mem.ppuRead(nametableEntry))
+                (self.bglowbyte, self.bghighbyte) = self.readPtab(
+                    base = self.bgPatternTableAddr,
+                    finey = row % 8,
+                    tile = ptabTile)
 
             finex = column % 8
             # most significant bit is leftmost bit
@@ -298,6 +364,25 @@ class PPU(object):
             color = colorindex * 85 # convert to 0-255 grayscale for now
 
             self.screenarray[column,row] = color
+
+            ## SPRITES
+
+            # Looping through all our sprites every pixel like this
+            # comes with a slight speed hit. But we can optimize
+            # it. TODO: that.
+            for sprite_i in range(self.nSpritesThisScanline):
+                spriteRow = self.spritesThisScanline[sprite_i]
+                sprite_x = spriteRow.x
+                if sprite_x <= column < sprite_x + 8:
+                    finex = column - sprite_x
+                    finexbit = 7 - finex
+                    assert (0 <= finexbit < 8)
+                    pixelbit0 = (spriteRow.lowcolor >> finexbit) & 0x1
+                    pixelbit1 = (spriteRow.highcolor >> finexbit) & 0x1
+                    colorindex = pixelbit0 + pixelbit1 * 2
+                    # TODO palette
+                    color = colorindex * 85 # convert to 0-255 grayscale for now
+                    self.screenarray[column,row] = color
             
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:
