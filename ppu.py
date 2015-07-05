@@ -291,17 +291,27 @@ class PPU(object):
                 # never be drawn on scanline 0.)
                 spritetop = ord(self.oam[sprite_oam_base]) + 1
                 # TODO account for 8x16 sprites
-                if self.scanline <= spritetop < (self.scanline + 8):
+                if spritetop <= self.scanline < (spritetop + 8):
                     if self.nSpritesThisScanline < MAX_SPRITES:
                         # construct SpriteRow object
-                        spriteX = ord(self.oam[sprite_oam_base+3])
                         tileIndex = ord(self.oam[sprite_oam_base+1])
-                        # TODO sprite attributes (byte 2)
+                        attributes = ord(self.oam[sprite_oam_base+2])
+                        spriteX = ord(self.oam[sprite_oam_base+3])
+                        finey = self.scanline % 8 # row % 8
+                        if attributes & 0x80: # vertical mirroring
+                            finey = 7 - finey
+                        horizontalMirror = bool(attributes & 0x40)
+                        priority = bool(attributes & 0x20)
+                        # TODO palette (attribute bits 0-1)
                         (lowcolor, highcolor) = self.readPtab(
                             base = self.spritePatternTableAddr,
-                            finey = self.scanline % 8, # row % 8
+                            finey = finey, 
                             tile = tileIndex)
-                        spriteRow = sprite.SpriteRow(spriteX, lowcolor, highcolor)
+                        spriteRow = sprite.SpriteRow(x = spriteX,
+                                                     lowcolor = lowcolor,
+                                                     highcolor = highcolor,
+                                                     horizontalMirror = horizontalMirror,
+                                                     priority = priority)
                         self.spritesThisScanline[self.nSpritesThisScanline] = spriteRow
                         self.nSpritesThisScanline += 1
                     else:
@@ -375,13 +385,14 @@ class PPU(object):
                 sprite_x = spriteRow.x
                 if sprite_x <= column < sprite_x + 8:
                     finex = column - sprite_x
-                    finexbit = 7 - finex
-                    assert (0 <= finexbit < 8)
+                    if not spriteRow.horizontalMirror:
+                        finexbit = 7 - finex
                     pixelbit0 = (spriteRow.lowcolor >> finexbit) & 0x1
                     pixelbit1 = (spriteRow.highcolor >> finexbit) & 0x1
                     colorindex = pixelbit0 + pixelbit1 * 2
                     # TODO palette
                     color = colorindex * 85 # convert to 0-255 grayscale for now
+                    # TODO respect priority
                     self.screenarray[column,row] = color
             
         self.cycle = (self.cycle + 1) % CYCLES
