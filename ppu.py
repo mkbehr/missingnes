@@ -387,6 +387,8 @@ class PPU(object):
                     finex = column - sprite_x
                     if not spriteRow.horizontalMirror:
                         finexbit = 7 - finex
+                    else:
+                        finexbit = finex
                     pixelbit0 = (spriteRow.lowcolor >> finexbit) & 0x1
                     pixelbit1 = (spriteRow.highcolor >> finexbit) & 0x1
                     colorindex = pixelbit0 + pixelbit1 * 2
