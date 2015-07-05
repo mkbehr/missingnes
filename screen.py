@@ -38,7 +38,7 @@ class Screen(object):
         self.window = pyglet.window.Window(width=SCREEN_WIDTH, height=SCREEN_HEIGHT)
         self.window.on_draw = self.on_draw
 
-    def tick(self):
+    def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         pyglet.clock.tick()
 
         for window in pyglet.app.windows:
@@ -46,6 +46,12 @@ class Screen(object):
             window.dispatch_events()
             window.dispatch_event('on_draw')
             window.flip()
+
+        if frame == 10: # DEBUG
+            # forgive me demeter for I have sinned
+            self.ppu.cpu.controller.inputState.states[3] = True
+        else:
+            self.ppu.cpu.controller.inputState.states[3] = False
 
     def on_draw(self):
         # Background: draw each background tile.

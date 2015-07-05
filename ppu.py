@@ -413,7 +413,8 @@ class PPU(object):
                                                dtype='bool')
                 if PPU_DEBUG:
                     print "BEGIN PPU FRAME %d" % self.frame
-                self.pgscreen.tick()
+                # TODO check the frame count for off-by-one errors
+                self.pgscreen.tick(self.frame)
         # TODO skip cycle 340 on scanline 239 on odd
         # frames... hahahaha no I don't care
 

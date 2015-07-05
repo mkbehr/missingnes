@@ -49,9 +49,7 @@ class Memory(object):
             return self.cpu.ppu.readReg(register)
         elif 0x4000 <= address < 0x4020:
             if address == 0x4016:
-                if JOYSTICK_WARN:
-                    print >> sys.stderr, "Warning: reporting no input from joystick 1"
-                return '\x00'
+                return chr(self.cpu.controller.read())
             elif address == 0x4017:
                 if JOYSTICK_WARN:
                     print >> sys.stderr, "Warning: reporting no input from joystick 2"
@@ -100,8 +98,8 @@ class Memory(object):
                 for i in range(256):
                     self.cpu.ppu.oam[i] = self.read(startaddr + i)
             elif address == 0x4016:
-                if JOYSTICK_WARN:
-                    print >> sys.stderr, "Warning: ignoring controller strobe"
+                strobe = bool(ord(val) & 1) 
+                self.cpu.controller.inputStrobe(strobe)
             elif address == 0x4017:
                 if APU_WARN:
                     print >> sys.stderr, "Warning: ignoring APU frame counter write"

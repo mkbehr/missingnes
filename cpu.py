@@ -1,3 +1,4 @@
+import controller
 import instruction
 import mem
 import opc
@@ -60,6 +61,9 @@ class CPU(object):
         # cycle, this goes up by the cycle count. When the PPU
         # executes a PPU cycle, this goes down by 3.)
         self.excessCycles = 0
+
+        # Controller
+        self.controller = controller.Controller()
 
         # Now that everything is set up, simulate the RST signal.
         # If we ever track frames, this will affect those.
