@@ -14,7 +14,7 @@ def instrFromAddr(address, cpu):
             out = m.instructionCache[address]
         return out
     else:
-        return fetchInstrFromAddr
+        return fetchInstrFromAddr(address, cpu)
 
 def fetchInstrFromAddr(address, cpu):
     # What would be nice to do here is cache instructions in a big
