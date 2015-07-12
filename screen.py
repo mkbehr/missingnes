@@ -83,10 +83,10 @@ class Screen(object):
 
 
         # working off the numpy array we store in the ppu for now
-        raw_img = self.ppu.screenarray.T.tobytes()
+        raw_img = self.ppu.screenarray.tobytes()
 
-        pglimage = pyglet.image.ImageData(SCREEN_WIDTH, SCREEN_HEIGHT, 'L',
-                                          raw_img, pitch= -SCREEN_WIDTH)
+        pglimage = pyglet.image.ImageData(SCREEN_WIDTH, SCREEN_HEIGHT, 'RGB',
+                                          raw_img, pitch= -(SCREEN_WIDTH * 3))
         self.window.clear()
         pglimage.blit(0,0)
 

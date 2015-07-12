@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 
+from palette import palette
 import sprite
 
 PPU_DEBUG = True
@@ -104,7 +105,9 @@ class PPU(object):
                     np.zeros((VISIBLE_COLUMNS/8, VISIBLE_SCANLINES/8),
                              dtype='bool'))
 
-        self.screenarray = np.zeros((VISIBLE_COLUMNS, VISIBLE_SCANLINES), dtype='uint8')
+        # screenarray must be in the format (y, x, color) for later conversion
+        # (pypy doesn't support permuting axes)
+        self.screenarray = np.zeros((VISIBLE_SCANLINES, VISIBLE_COLUMNS, 3), dtype='uint8')
 
         from screen import Screen # herp derp circular import
         self.pgscreen = Screen(self)
@@ -371,9 +374,11 @@ class PPU(object):
             
             # color = TODOrelevantgray(colorindex)
             # TODOdrawpixel(TODOrow, TODOcolumn, TODOcolor)
-            color = colorindex * 85 # convert to 0-255 grayscale for now
+            #color = colorindex * 85 # convert to 0-255 grayscale for now
+            color = palette(colorindex)
 
-            self.screenarray[column,row] = color
+            # remember, screenarray is in format (y,x,rgb)
+            self.screenarray[row,column,:] = color
 
             ## SPRITES
 
@@ -394,9 +399,11 @@ class PPU(object):
                     colorindex = pixelbit0 + pixelbit1 * 2
                     if colorindex != 0: # 0 is always transparent
                         # TODO palette
-                        color = colorindex * 85 # convert to 0-255 grayscale for now
+                        #color = colorindex * 85 # convert to 0-255 grayscale for now
+                        color = palette(colorindex)
                         # TODO respect priority
-                        self.screenarray[column,row] = color
+                        # remember, screenarray is in format (y,x,rgb)
+                        self.screenarray[row,column,:] = color
             
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:
