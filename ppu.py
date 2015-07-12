@@ -4,6 +4,8 @@ import numpy as np
 from palette import palette
 import sprite
 
+DRAW_GRID = False
+
 PPU_DEBUG = True
 
 SCANLINES = 262
@@ -375,13 +377,18 @@ class PPU(object):
                 attributeTable = nametable + 0x3C0
                 attributeTableEntry = attributeTable + attributeColumn + attributeRow * 8
                 attributeTile = ord(self.cpu.mem.ppuRead(attributeTableEntry))
-                # clunky way of computing palette offset; we'll see if it works
+
+                # The attributeTile byte divides the 32x32 tile into
+                # four 16x16 quarter-tiles. Bits 0-1 specify the
+                # palette for the top-left quarter-tile, bits 2-3 are
+                # the top-right, bits 4-5 are the bottom-left, and
+                # bits 6-7 are the bottom-right.
                 paletteOffset = 0
-                if (column % 16) != 0:
+                if (column % 32) >= 16:
                     paletteOffset += 1*2
-                # this is equivalent to (topRow % 16), where topRow is at the top of the tile
-                if ((row / 8) % 2) != 0:
+                if (row % 32) >= 16:
                     paletteOffset += 2*2
+
                 paletteNumber = (attributeTile >> paletteOffset) & 0x3
                 #print (column, row, paletteOffset, paletteNumber) # DEBUG
                 # TODO no magic numbers
@@ -428,6 +435,11 @@ class PPU(object):
                     if colorindex != 0: # 0 is always transparent
                         # TODO: use individual palettes
                         self.screenarray[column,row] = colorindex
+
+            if (DRAW_GRID and ((row % 8) == 0 or (column % 8) == 0)):
+                self.screenarray[column,row] = 0x30 # white(ish)
+            if (DRAW_GRID and ((row % 32) == 0 or (column % 32) == 0)):
+                self.screenarray[column,row] = 0x16 # red
             
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:
@@ -444,12 +456,16 @@ class PPU(object):
                                                dtype='bool')
                 # TODO: if the VRAM address points to something in
                 # $3f00-$3fff, set universalbg to that instead of
-                # $3f00
+                # $3f00 (though for exact behavior, this should
+                # actually be checked repeatedly during the frame - I
+                # don't know exactly how often). This is the
+                # "background hack".
                 self.universalbg = ord(self.cpu.mem.ppuRead(0x3F00)) # TODO no magic numbers
                 if PPU_DEBUG:
                     print "BEGIN PPU FRAME %d" % self.frame
                 # TODO check the frame count for off-by-one errors
                 self.pgscreen.tick(self.frame)
+
         # TODO skip cycle 340 on scanline 239 on odd
         # frames... hahahaha no I don't care
 
