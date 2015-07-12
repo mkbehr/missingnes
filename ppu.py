@@ -97,7 +97,8 @@ class PPU(object):
         ## Background tile caches
         self.bglowbyte = 0
         self.bghighbyte = 0
-        self.bgpalette = None # TODO
+        self.bgpalette = [0,0,0] # global palette indexes for numbers 1, 2, and 3
+        self.universalBg = 0 # global palette index for number 0
 
         # Whether or not to redraw a background tile. This will get
         # messier once sprites exist; for now pretend they don't.
@@ -353,7 +354,8 @@ class PPU(object):
             # can pull 8 horizontally-continguous pixels at once; we
             # have a low-plane byte with the low-plane bits for 8
             # pixels, and a high-plane byte with the high-plane bits
-            # for the same 8 pixels.
+            # for the same 8 pixels. Finally, we need to grab the
+            # background palette from the attribute table.
             if (column % 8) == 0:
                 nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
                 # double-check this:
@@ -364,6 +366,31 @@ class PPU(object):
                     finey = row % 8,
                     tile = ptabTile)
 
+                # Note: We are definitely at the left of the tile, but
+                # we may not be at the top.
+                
+                # TODO don't use magic numbers
+                attributeRow = row / 32 # rely on truncating down here
+                attributeColumn = column / 32
+                attributeTable = nametable + 0x3C0
+                attributeTableEntry = attributeTable + attributeColumn + attributeRow * 8
+                attributeTile = ord(self.cpu.mem.ppuRead(attributeTableEntry))
+                # clunky way of computing palette offset; we'll see if it works
+                paletteOffset = 0
+                if (column % 16) != 0:
+                    paletteOffset += 1*2
+                # this is equivalent to (topRow % 16), where topRow is at the top of the tile
+                if ((row / 8) % 2) != 0:
+                    paletteOffset += 2*2
+                paletteNumber = (attributeTile >> paletteOffset) & 0x3
+                #print (column, row, paletteOffset, paletteNumber) # DEBUG
+                # TODO no magic numbers
+                paletteAddr = 0x3F01 + (paletteNumber * 4)
+                paletteData = [ord(self.cpu.mem.ppuRead(paletteAddr)),
+                               ord(self.cpu.mem.ppuRead(paletteAddr+1)),
+                               ord(self.cpu.mem.ppuRead(paletteAddr+2))]
+                self.bgpalette = paletteData
+
             finex = column % 8
             # most significant bit is leftmost bit
             finexbit = 7 - finex
@@ -371,12 +398,15 @@ class PPU(object):
             pixelbit0 = (self.bglowbyte >> finexbit) & 0x1
             pixelbit1 = (self.bghighbyte >> finexbit) & 0x1
             colorindex = pixelbit0 + pixelbit1 * 2
+
             # start by just interpreting colorindex as a grayscale
             # value from 0 (black) to 3 (white); eventually we will
             # want to look up a color from the attribute tables
             
-            # TODO: use individual palettes
-            self.screenarray[column,row] = colorindex
+            if colorindex == 0:
+                self.screenarray[column, row] = self.universalbg
+            else:
+                self.screenarray[column, row] = self.bgpalette[colorindex-1]
 
             ## SPRITES
 
@@ -412,6 +442,10 @@ class PPU(object):
                 self.nextredrawtile = np.zeros((VISIBLE_COLUMNS/8,
                                                 VISIBLE_SCANLINES/8),
                                                dtype='bool')
+                # TODO: if the VRAM address points to something in
+                # $3f00-$3fff, set universalbg to that instead of
+                # $3f00
+                self.universalbg = ord(self.cpu.mem.ppuRead(0x3F00)) # TODO no magic numbers
                 if PPU_DEBUG:
                     print "BEGIN PPU FRAME %d" % self.frame
                 # TODO check the frame count for off-by-one errors

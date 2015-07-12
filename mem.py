@@ -145,6 +145,7 @@ class Memory(object):
             # mirror memory at 0x2000
             return self.ppuRead(address - 0x1000)
         elif 0x3f00 <= address <= 0x4000:
+            # TODO: 3f14/3f18/3f1c mirror 3f04/3f08/3f0c
             paletteRamAddr = (address - 0x3f00) % 32
             return self.cpu.ppu.paletteRam[paletteRamAddr]
         else:
@@ -168,6 +169,9 @@ class Memory(object):
             # TODO we probably shouldn't be talking to the ppu
             # directly here
 
+            #if ntabOffset > 0x3c0:
+                #print >> sys.stderr, "[%x] PPU ATTRIBUTE WRITE %x TO %x" % (self.cpu.currentInstruction, ord(val), address) # DEBUG
+
             # this might actually be part of the attribute table, but
             # the ppu code will handle that
             self.cpu.ppu.flushBgTile(tileX, tileY)
@@ -176,6 +180,7 @@ class Memory(object):
             # mirror memory at 0x2000
             self.ppuWrite(address - 0x1000, val)
         elif 0x3f00 <= address <= 0x4000:
+            # TODO: 3f14/3f18/3f1c mirror 3f04/3f08/3f0c
             paletteRamAddr = (address - 0x3f00) % 32
             self.cpu.ppu.paletteRam[paletteRamAddr] = val
         else:
