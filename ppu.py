@@ -309,9 +309,9 @@ class PPU(object):
                         finey = self.scanline - spritetop # row - spritetop
                         if attributes & 0x80: # vertical mirroring
                             finey = 7 - finey
+                        spritePalette = attributes & 0x3
                         horizontalMirror = bool(attributes & 0x40)
                         priority = bool(attributes & 0x20)
-                        # TODO palette (attribute bits 0-1)
                         (lowcolor, highcolor) = self.readPtab(
                             base = self.spritePatternTableAddr,
                             finey = finey, 
@@ -319,6 +319,7 @@ class PPU(object):
                         spriteRow = sprite.SpriteRow(x = spriteX,
                                                      lowcolor = lowcolor,
                                                      highcolor = highcolor,
+                                                     palette = spritePalette,
                                                      horizontalMirror = horizontalMirror,
                                                      priority = priority)
                         self.spritesThisScanline[self.nSpritesThisScanline] = spriteRow
@@ -390,7 +391,6 @@ class PPU(object):
                     paletteOffset += 2*2
 
                 paletteNumber = (attributeTile >> paletteOffset) & 0x3
-                #print (column, row, paletteOffset, paletteNumber) # DEBUG
                 # TODO no magic numbers
                 paletteAddr = 0x3F01 + (paletteNumber * 4)
                 paletteData = [ord(self.cpu.mem.ppuRead(paletteAddr)),
@@ -433,8 +433,13 @@ class PPU(object):
                     pixelbit1 = (spriteRow.highcolor >> finexbit) & 0x1
                     colorindex = pixelbit0 + pixelbit1 * 2
                     if colorindex != 0: # 0 is always transparent
-                        # TODO: use individual palettes
-                        self.screenarray[column,row] = colorindex
+
+                        # TODO no magic numbers
+                        paletteAddr = 0x3F11 + spriteRow.palette * 4
+                        # TODO test to see whether caching this read
+                        # could give performance increases
+                        color = ord(self.cpu.mem.ppuRead(paletteAddr+(colorindex-1)))
+                        self.screenarray[column,row] = color
 
             if (DRAW_GRID and ((row % 8) == 0 or (column % 8) == 0)):
                 self.screenarray[column,row] = 0x30 # white(ish)
