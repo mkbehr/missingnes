@@ -145,9 +145,8 @@ class Memory(object):
             # mirror memory at 0x2000
             return self.ppuRead(address - 0x1000)
         elif 0x3f00 <= address <= 0x4000:
-            # return '\x00' # DEBUG
-            # maybe it's its own thing? like OAM?
-            raise NotImplementedError("augh where does the palette memory even live")
+            paletteRamAddr = (address - 0x3f00) % 32
+            return self.ppu.paletteRam[paletteRamAddr]
         else:
             raise RuntimeError("PPU read address out of range: %x" % address)
 
@@ -177,11 +176,8 @@ class Memory(object):
             # mirror memory at 0x2000
             self.ppuWrite(address - 0x1000, val)
         elif 0x3f00 <= address <= 0x4000:
-            if PPU_DEBUG:
-                print >> sys.stderr, "Warning: ignoring write to palette memory"
-            return
-            # maybe it's its own thing? like OAM?
-            # raise NotImplementedError("augh where does the palette memory even live")
+            paletteRamAddr = (address - 0x3f00) % 32
+            self.cpu.ppu.paletteRam[paletteRamAddr] = val
         else:
             raise RuntimeError("PPU write address out of range: %x" % address)
 

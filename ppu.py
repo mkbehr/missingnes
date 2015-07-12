@@ -23,8 +23,11 @@ REG_PPUSCROLL = 5
 REG_PPUADDR = 6
 REG_PPUDATA = 7
 
+# TODO consider whether OAM and palette memory should be stored here
+# instead of in the memory object
 OAM_SIZE = 256
 OAM_ENTRY_SIZE = 4
+PALETTE_SIZE = 32
 
 MAX_SPRITES = 8 # maximum number of sprites displayed per scanline
 
@@ -42,6 +45,7 @@ class PPU(object):
         self.latch = 0x0
 
         self.oam = ['\x00' for i in range(OAM_SIZE)]
+        self.paletteRam = ['\x00' for i in range(PALETTE_SIZE)]
 
         ## PPUCTRL flags
         
@@ -93,6 +97,7 @@ class PPU(object):
         ## Background tile caches
         self.bglowbyte = 0
         self.bghighbyte = 0
+        self.bgpalette = None # TODO
 
         # Whether or not to redraw a background tile. This will get
         # messier once sprites exist; for now pretend they don't.
