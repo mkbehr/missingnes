@@ -86,7 +86,8 @@ class Screen(object):
         # working off the numpy array we store in the ppu for now
         np_img = self.ppu.screenarray.T.tobytes()
 
-        # use PIL for fast palette conversion
+        # use PIL for fast palette conversion (but this is still
+        # significantly slower than without the palette)
         pil_img = Image.frombytes('P', self.ppu.screenarray.shape, np_img)
         pil_img.putpalette(palette.PALETTE_BYTES)
 
