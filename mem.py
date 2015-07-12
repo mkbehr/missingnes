@@ -146,7 +146,7 @@ class Memory(object):
             return self.ppuRead(address - 0x1000)
         elif 0x3f00 <= address <= 0x4000:
             paletteRamAddr = (address - 0x3f00) % 32
-            return self.ppu.paletteRam[paletteRamAddr]
+            return self.cpu.ppu.paletteRam[paletteRamAddr]
         else:
             raise RuntimeError("PPU read address out of range: %x" % address)
 
