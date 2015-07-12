@@ -11,6 +11,7 @@ from pyglet.window import key
 from PIL import Image
 import numpy as np
 
+import palette
 import ppu
 
 # For now, we're going to keep pyglet's redraw interval decoupled from
@@ -83,7 +84,13 @@ class Screen(object):
 
 
         # working off the numpy array we store in the ppu for now
-        raw_img = self.ppu.screenarray.tobytes()
+        np_img = self.ppu.screenarray.T.tobytes()
+
+        # use PIL for fast palette conversion
+        pil_img = Image.frombytes('P', self.ppu.screenarray.shape, np_img)
+        pil_img.putpalette(palette.PALETTE_BYTES)
+
+        raw_img = pil_img.convert('RGB').tobytes()
 
         pglimage = pyglet.image.ImageData(SCREEN_WIDTH, SCREEN_HEIGHT, 'RGB',
                                           raw_img, pitch= -(SCREEN_WIDTH * 3))

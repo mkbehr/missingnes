@@ -105,9 +105,7 @@ class PPU(object):
                     np.zeros((VISIBLE_COLUMNS/8, VISIBLE_SCANLINES/8),
                              dtype='bool'))
 
-        # screenarray must be in the format (y, x, color) for later conversion
-        # (pypy doesn't support permuting axes)
-        self.screenarray = np.zeros((VISIBLE_SCANLINES, VISIBLE_COLUMNS, 3), dtype='uint8')
+        self.screenarray = np.zeros((VISIBLE_COLUMNS, VISIBLE_SCANLINES), dtype='uint8')
 
         from screen import Screen # herp derp circular import
         self.pgscreen = Screen(self)
@@ -372,13 +370,8 @@ class PPU(object):
             # value from 0 (black) to 3 (white); eventually we will
             # want to look up a color from the attribute tables
             
-            # color = TODOrelevantgray(colorindex)
-            # TODOdrawpixel(TODOrow, TODOcolumn, TODOcolor)
-            #color = colorindex * 85 # convert to 0-255 grayscale for now
-            color = palette(colorindex)
-
-            # remember, screenarray is in format (y,x,rgb)
-            self.screenarray[row,column,:] = color
+            # TODO: use individual palettes
+            self.screenarray[column,row] = colorindex
 
             ## SPRITES
 
@@ -398,12 +391,8 @@ class PPU(object):
                     pixelbit1 = (spriteRow.highcolor >> finexbit) & 0x1
                     colorindex = pixelbit0 + pixelbit1 * 2
                     if colorindex != 0: # 0 is always transparent
-                        # TODO palette
-                        #color = colorindex * 85 # convert to 0-255 grayscale for now
-                        color = palette(colorindex)
-                        # TODO respect priority
-                        # remember, screenarray is in format (y,x,rgb)
-                        self.screenarray[row,column,:] = color
+                        # TODO: use individual palettes
+                        self.screenarray[column,row] = colorindex
             
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:
