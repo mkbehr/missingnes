@@ -439,7 +439,7 @@ class PPU(object):
             drawBkg = (colorindex == 0) or (not self.showBkg) or (not self.leftBkg and column < 8)
 
             if drawBkg:
-                self.screenarray[column, row] = self.universalbg
+                self.screenarray[column, row] = self.universalBg
             else:
                 self.screenarray[column, row] = self.bgpalette[colorindex-1]
 
@@ -490,12 +490,12 @@ class PPU(object):
                                                 VISIBLE_SCANLINES/8),
                                                dtype='bool')
                 # TODO: if the VRAM address points to something in
-                # $3f00-$3fff, set universalbg to that instead of
+                # $3f00-$3fff, set universalBg to that instead of
                 # $3f00 (though for exact behavior, this should
                 # actually be checked repeatedly during the frame - I
                 # don't know exactly how often). This is the
                 # "background hack".
-                self.universalbg = ord(self.cpu.mem.ppuRead(0x3F00)) # TODO no magic numbers
+                self.universalBg = ord(self.cpu.mem.ppuRead(0x3F00)) # TODO no magic numbers
                 if PPU_DEBUG:
                     print "BEGIN PPU FRAME %d" % self.frame
                 # TODO check the frame count for off-by-one errors
