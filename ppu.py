@@ -210,7 +210,8 @@ class PPU(object):
                 self.nextScroll = 0
         elif register == REG_PPUADDR:
             if self.nextAddr == 0:
-                self.addrHigh = val
+                # addresses past $3fff are mirrored down
+                self.addrHigh = val & 0x3f
                 self.nextAddr = 1
             else:
                 self.addrLow = val
