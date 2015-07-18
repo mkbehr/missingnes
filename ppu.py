@@ -71,7 +71,15 @@ class PPU(object):
         # blanking interval.
         self.vblankNMI = 0
 
-        ## TODO PPUMASK flags
+        ## PPUMASK flags
+        self.grayscale = 0
+        self.leftBkg = 0
+        self.leftSprites = 0
+        self.showBkg = 0
+        self.showSprites = 0
+        self.emphasizeRed = 0
+        self.emphasizeGreen = 0
+        self.emphasizeBlue = 0
 
         ## PPUSTATUS flags
         self.spriteOverflow = 0
@@ -197,9 +205,16 @@ class PPU(object):
             if self.ppuMasterSlave:
                 raise RuntimeError("We set the PPU master/slave bit! That's bad!")
         elif register == REG_PPUMASK:
-            if PPU_DEBUG:
-                print >> sys.stderr, "Ignoring write to PPUMASK for now: {0:08b}".format(val)
-                print >> sys.stderr, "PPUMASK write: next instruction is %x" % self.cpu.PC
+            self.grayscale = val & 0x1 # bit 0
+            self.leftBkg = (val >> 1) & 0x1 # bit 1
+            self.leftSprites = (val >> 2) & 0x1 # bit 2
+            self.showBkg = (val >> 3) & 0x1 # bit 3
+            self.showSprites = (val >> 4) & 0x1 # bit 4
+            self.emphasizeRed = (val >> 5) & 0x1 # bit 5
+            self.emphasizeGreen = (val >> 6) & 0x1 # bit 6
+            self.emphasizeBlue = (val >> 7) & 0x1 # bit 7
+            if PPU_DEBUG and (self.emphasizeRed or self.emphasizeGreen or self.emphasizeBlue):
+                print >> sys.stderr, "PPUMASK write: ignoring color emphasis"
             pass
         elif register == REG_PPUSTATUS:
             if PPU_DEBUG:
@@ -340,8 +355,7 @@ class PPU(object):
                         # http://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
                         self.spriteOverflow = 1
 
-        # if we're on a visible pixel, draw that pixel, unless we're
-        # not redrawing it
+        # if we're on a visible pixel, draw that pixel
         if self.scanline < VISIBLE_SCANLINES and self.cycle < VISIBLE_COLUMNS:
             # TODO: get tile caching to work with sprites. Once that
             # works, we'll look at the value of
@@ -416,11 +430,15 @@ class PPU(object):
             pixelbit1 = (self.bghighbyte >> finexbit) & 0x1
             colorindex = pixelbit0 + pixelbit1 * 2
 
-            # start by just interpreting colorindex as a grayscale
-            # value from 0 (black) to 3 (white); eventually we will
-            # want to look up a color from the attribute tables
-            
-            if colorindex == 0:
+            # grayscale
+            if self.grayscale:
+                colorindex &= 0xf0
+
+            # look up a color from the attribute tables
+
+            drawBkg = (colorindex == 0) or (not self.showBkg) or (not self.leftBkg and column < 8)
+
+            if drawBkg:
                 self.screenarray[column, row] = self.universalbg
             else:
                 self.screenarray[column, row] = self.bgpalette[colorindex-1]
@@ -442,8 +460,8 @@ class PPU(object):
                     pixelbit0 = (spriteRow.lowcolor >> finexbit) & 0x1
                     pixelbit1 = (spriteRow.highcolor >> finexbit) & 0x1
                     colorindex = pixelbit0 + pixelbit1 * 2
-                    if colorindex != 0: # 0 is always transparent
-
+                    drawSprite = (colorindex == 0) or (not self.showSprites) or (not self.leftSprites and column < 8)
+                    if not drawSprite:
                         # TODO no magic numbers
                         paletteAddr = 0x3F11 + spriteRow.palette * 4
                         # TODO test to see whether caching this read
