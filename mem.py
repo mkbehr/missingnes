@@ -156,7 +156,6 @@ class Memory(object):
     def ppuWrite(self, address, val):
         if isinstance(val, int):
             val = chr(val)
-        # print >> sys.stderr, "[%x] PPU WRITE %x TO %x" % (self.cpu.currentInstruction, ord(val), address) # DEBUG
         if 0 <= address < 0x2000:
             raise RuntimeError("Can't write to CHR ROM")
         elif 0x2000 <= address < 0x3000:
@@ -171,9 +170,6 @@ class Memory(object):
             # TODO we probably shouldn't be talking to the ppu
             # directly here
 
-            #if ntabOffset > 0x3c0:
-                #print >> sys.stderr, "[%x] PPU ATTRIBUTE WRITE %x TO %x" % (self.cpu.currentInstruction, ord(val), address) # DEBUG
-
             # this might actually be part of the attribute table, but
             # the ppu code will handle that
             self.cpu.ppu.flushBgTile(tileX, tileY)
@@ -186,7 +182,6 @@ class Memory(object):
             # 3f14/3f18/3f1c mirror 3f04/3f08/3f0c
             if paletteRamAddr % 4 == 0:
                 paletteRamAddr &= 0x0f
-            print "%x -> %x" % (address, paletteRamAddr) # DEBUG
             self.cpu.ppu.paletteRam[paletteRamAddr] = val
         else:
             raise RuntimeError("PPU write address out of range: %x" % address)

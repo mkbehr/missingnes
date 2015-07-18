@@ -464,12 +464,14 @@ class PPU(object):
                         colorindex &= 0x30
                     drawSprite = (colorindex == 0) or (not self.showSprites) or (not self.leftSprites and column < 8)
                     if not drawSprite:
-                        # TODO no magic numbers
-                        paletteAddr = 0x3F11 + spriteRow.palette * 4
-                        # TODO test to see whether caching this read
-                        # could give performance increases
-                        color = ord(self.cpu.mem.ppuRead(paletteAddr+(colorindex-1)))
-                        self.screenarray[column,row] = color
+                        if spriteRow.priority == 0: # front priority
+                            # TODO no magic numbers
+                            paletteAddr = 0x3F11 + spriteRow.palette * 4
+                            # TODO test to see whether caching this read
+                            # could give performance increases
+                            color = ord(self.cpu.mem.ppuRead(paletteAddr+(colorindex-1)))
+                            self.screenarray[column,row] = color
+                        break # even if this was a background sprite, we're done with sprites this pixel
 
             if (DRAW_GRID and ((row % 8) == 0 or (column % 8) == 0)):
                 self.screenarray[column,row] = 0x30 # white(ish)
