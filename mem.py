@@ -145,8 +145,10 @@ class Memory(object):
             # mirror memory at 0x2000
             return self.ppuRead(address - 0x1000)
         elif 0x3f00 <= address <= 0x4000:
-            # TODO: 3f14/3f18/3f1c mirror 3f04/3f08/3f0c
             paletteRamAddr = (address - 0x3f00) % 32
+            # 3f14/3f18/3f1c mirror 3f04/3f08/3f0c
+            if paletteRamAddr % 4 == 0:
+                paletteRamAddr &= 0x0f
             return self.cpu.ppu.paletteRam[paletteRamAddr]
         else:
             raise RuntimeError("PPU read address out of range: %x" % address)
@@ -180,8 +182,11 @@ class Memory(object):
             # mirror memory at 0x2000
             self.ppuWrite(address - 0x1000, val)
         elif 0x3f00 <= address <= 0x4000:
-            # TODO: 3f14/3f18/3f1c mirror 3f04/3f08/3f0c
             paletteRamAddr = (address - 0x3f00) % 32
+            # 3f14/3f18/3f1c mirror 3f04/3f08/3f0c
+            if paletteRamAddr % 4 == 0:
+                paletteRamAddr &= 0x0f
+            print "%x -> %x" % (address, paletteRamAddr) # DEBUG
             self.cpu.ppu.paletteRam[paletteRamAddr] = val
         else:
             raise RuntimeError("PPU write address out of range: %x" % address)
