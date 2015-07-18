@@ -432,7 +432,7 @@ class PPU(object):
 
             # grayscale
             if self.grayscale:
-                colorindex &= 0xf0
+                colorindex &= 0x30
 
             # look up a color from the attribute tables
 
@@ -460,6 +460,8 @@ class PPU(object):
                     pixelbit0 = (spriteRow.lowcolor >> finexbit) & 0x1
                     pixelbit1 = (spriteRow.highcolor >> finexbit) & 0x1
                     colorindex = pixelbit0 + pixelbit1 * 2
+                    if self.grayscale:
+                        colorindex &= 0x30
                     drawSprite = (colorindex == 0) or (not self.showSprites) or (not self.leftSprites and column < 8)
                     if not drawSprite:
                         # TODO no magic numbers
