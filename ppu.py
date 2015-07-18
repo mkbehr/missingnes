@@ -125,6 +125,8 @@ class PPU(object):
                              dtype='bool'))
 
         self.screenarray = np.zeros((VISIBLE_COLUMNS, VISIBLE_SCANLINES), dtype='uint8')
+        # for sprite 0
+        self.bkgOpacity = np.zeros((VISIBLE_COLUMNS, VISIBLE_SCANLINES), dtype='bool')
 
         from screen import Screen # herp derp circular import
         self.pgscreen = Screen(self)
@@ -341,7 +343,8 @@ class PPU(object):
                             base = self.spritePatternTableAddr,
                             finey = finey, 
                             tile = tileIndex)
-                        spriteRow = sprite.SpriteRow(x = spriteX,
+                        spriteRow = sprite.SpriteRow(index = sprite_i,
+                                                     x = spriteX,
                                                      lowcolor = lowcolor,
                                                      highcolor = highcolor,
                                                      palette = spritePalette,
@@ -440,8 +443,10 @@ class PPU(object):
 
             if drawBkg:
                 self.screenarray[column, row] = self.universalBg
+                self.bkgOpacity[column, row] = False
             else:
                 self.screenarray[column, row] = self.bgpalette[colorindex-1]
+                self.bkgOpacity[column, row] = True
 
             ## SPRITES
 
@@ -462,8 +467,8 @@ class PPU(object):
                     colorindex = pixelbit0 + pixelbit1 * 2
                     if self.grayscale:
                         colorindex &= 0x30
-                    drawSprite = (colorindex == 0) or (not self.showSprites) or (not self.leftSprites and column < 8)
-                    if not drawSprite:
+                    drawSprite = not ((colorindex == 0) or (not self.showSprites) or (not self.leftSprites and column < 8))
+                    if drawSprite:
                         if spriteRow.priority == 0: # front priority
                             # TODO no magic numbers
                             paletteAddr = 0x3F11 + spriteRow.palette * 4
@@ -471,6 +476,9 @@ class PPU(object):
                             # could give performance increases
                             color = ord(self.cpu.mem.ppuRead(paletteAddr+(colorindex-1)))
                             self.screenarray[column,row] = color
+                        # Regardless, check for sprite 0 hits
+                        if spriteRow.index == 0 and column != 255:
+                            self.sprite0Hit = 1
                         break # even if this was a background sprite, we're done with sprites this pixel
 
             if (DRAW_GRID and ((row % 8) == 0 or (column % 8) == 0)):
@@ -502,6 +510,8 @@ class PPU(object):
                     print "BEGIN PPU FRAME %d" % self.frame
                 # TODO check the frame count for off-by-one errors
                 self.pgscreen.tick(self.frame)
+            elif self.scanline == (-1 % SCANLINES):
+                self.sprite0Hit = 0
 
         # TODO skip cycle 340 on scanline 239 on odd
         # frames... hahahaha no I don't care

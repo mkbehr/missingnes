@@ -4,8 +4,8 @@ single scanline.
 
     """
 
-    def __init__(self, x, lowcolor, highcolor, palette, horizontalMirror, priority):
-        # TODO sprite attributes (byte 2)
+    def __init__(self, index, x, lowcolor, highcolor, palette, horizontalMirror, priority):
+        self.index = index
         self.x = x
         self.lowcolor = lowcolor
         self.highcolor = highcolor
