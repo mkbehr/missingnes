@@ -92,6 +92,9 @@ class PPU(object):
         self.addrLow = 0
         self.nextAddr = 0 # 0 for high, 1 for low
 
+        ## PPUDATA
+        self.ppuDataBuffer = 0
+
         ## Sprite-relevant state
         self.spritesThisScanline = [None for i in range(MAX_SPRITES)]
         self.nSpritesThisScanline = 0
@@ -157,7 +160,13 @@ class PPU(object):
             if PPU_DEBUG:
                 print >> sys.stderr, 'Warning: read from PPUADDR'
         elif register == REG_PPUDATA:
-            self.latch = ord(self.cpu.mem.ppuRead(self.ppuaddr))
+            # do not question the PPUDATA post-fetch read buffer
+            if self.ppuaddr < 0x3f00:
+                self.latch = self.ppuDataBuffer
+                self.ppuDataBuffer = ord(self.cpu.mem.ppuRead(self.ppuaddr))
+            else:
+                self.ppuDataBuffer = ord(self.cpu.mem.ppuRead(self.ppuaddr))
+                self.latch = self.ppuDataBuffer
             self.advanceVram()
         else:
             raise RuntimeError("PPU read from bad register %x" % register)
