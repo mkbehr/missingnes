@@ -1,7 +1,8 @@
 import sys
 import numpy as np
 
-from palette import palette
+import palette
+import ppucache
 import sprite
 
 DRAW_GRID = False
@@ -38,6 +39,8 @@ class PPU(object):
     def __init__(self, cpu):
         self.cpu = cpu
 
+        self.cache = ppucache.PPUCache(self)
+
         self.scanline = 261
         self.cycle = 0
         self.frame = 0
@@ -50,7 +53,7 @@ class PPU(object):
         self.paletteRam = ['\x00' for i in range(PALETTE_SIZE)]
 
         ## PPUCTRL flags
-        
+
         # base nametable address: 0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00
         self.nametableBase = 0
         # VRAM address increment per CPU read/write of PPUDATA.
@@ -189,7 +192,7 @@ class PPU(object):
         if register == REG_PPUCTRL:
             oldNametableBase = self.nametableBase
             oldBgPatternTableAddr = self.bgPatternTableAddr
-            
+
             self.nametableBase = val & 0x3 # bits 0,1
             self.vramInc = (val >> 2) & 0x1 # bit 2
             self.spritePatternTableAddr = (val >> 3) & 0x1 # bit 3
@@ -203,7 +206,7 @@ class PPU(object):
             if (self.nametableBase != oldNametableBase or
                 self.bgPatternTableAddr != oldBgPatternTableAddr):
                 self.flushBgCache()
-            
+
             if self.ppuMasterSlave:
                 raise RuntimeError("We set the PPU master/slave bit! That's bad!")
         elif register == REG_PPUMASK:
@@ -299,7 +302,7 @@ class PPU(object):
         #   sprites are, we can avoid redrawing most of the screen)
         # - keep track of when we next have to do things
         # - don't call ppuTick until then
-        
+
         if (self.scanline, self.cycle) == VBLANK_START:
             self.vblank = 1
             if self.vblankNMI:
@@ -341,7 +344,7 @@ class PPU(object):
                         priority = bool(attributes & 0x20)
                         (lowcolor, highcolor) = self.readPtab(
                             base = self.spritePatternTableAddr,
-                            finey = finey, 
+                            finey = finey,
                             tile = tileIndex)
                         spriteRow = sprite.SpriteRow(index = sprite_i,
                                                      x = spriteX,
@@ -366,7 +369,7 @@ class PPU(object):
             # to determine whether we need to redraw.
 
             ## BACKGROUND
-            
+
             # Grab data from nametable to find pattern table
             # entry. There are 30*32 bytes in a pattern table, and
             # each byte corresponds to an 8*8-pixel tile. So I guess
@@ -387,10 +390,12 @@ class PPU(object):
             # for the same 8 pixels. Finally, we need to grab the
             # background palette from the attribute table.
             if (column % 8) == 0:
+
                 nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
                 # double-check this:
                 nametableEntry = nametable + tilecolumn + tilerow * 32
                 ptabTile = ord(self.cpu.mem.ppuRead(nametableEntry))
+
                 (self.bglowbyte, self.bghighbyte) = self.readPtab(
                     base = self.bgPatternTableAddr,
                     finey = row % 8,
@@ -398,7 +403,7 @@ class PPU(object):
 
                 # Note: We are definitely at the left of the tile, but
                 # we may not be at the top.
-                
+
                 # TODO don't use magic numbers
                 attributeRow = row / 32 # rely on truncating down here
                 attributeColumn = column / 32
@@ -425,10 +430,22 @@ class PPU(object):
                                ord(self.cpu.mem.ppuRead(paletteAddr+2))]
                 self.bgpalette = paletteData
 
+                # ppucache's stuff
+                pglimage = self.cache.pglFetchBgTile(
+                    base = self.bgPatternTableAddr,
+                    tile = ptabTile,
+                    bg = self.universalBg,
+                    paletteData = paletteData)
+                if pglimage is not self.pgscreen.bgSprites[tilecolumn][tilerow].image:
+                    self.pgscreen.bgSprites[tilecolumn][tilerow].image = pglimage
+                else:
+                    print "didnt update bg sprite"
+
+
             finex = column % 8
             # most significant bit is leftmost bit
             finexbit = 7 - finex
-            
+
             pixelbit0 = (self.bglowbyte >> finexbit) & 0x1
             pixelbit1 = (self.bghighbyte >> finexbit) & 0x1
             colorindex = pixelbit0 + pixelbit1 * 2
@@ -485,7 +502,7 @@ class PPU(object):
                 self.screenarray[column,row] = 0x30 # white(ish)
             if (DRAW_GRID and ((row % 32) == 0 or (column % 32) == 0)):
                 self.screenarray[column,row] = 0x16 # red
-            
+
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:
             self.scanline = (self.scanline + 1) % SCANLINES

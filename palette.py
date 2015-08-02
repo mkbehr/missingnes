@@ -27,3 +27,7 @@ PALETTE_BYTES = PALETTE[:].tobytes()
 
 def palette(index):
     return PALETTE[index,:]
+
+def smallPaletteBytes(bg, paletteData):
+    # excessively long but I don't want to look up library functions
+    return PALETTE[[bg, paletteData[0], paletteData[1], paletteData[2]],:].tobytes()

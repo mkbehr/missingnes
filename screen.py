@@ -43,6 +43,15 @@ class Screen(object):
         self.keys = key.KeyStateHandler()
         self.window.push_handlers(self.keys)
 
+        dummyImage = pyglet.image.ImageData(1, 1, 'L', "\x00", pitch= 1)
+
+        self.bgBatch = pyglet.graphics.Batch()
+        self.bgSprites = [
+            # FIXME bad y coordinate
+            [pyglet.sprite.Sprite(dummyImage, x*8, y*8, batch=self.bgBatch)
+             for y in range(TILE_ROWS)]
+            for x in range(TILE_COLUMNS)]
+
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         pyglet.clock.tick()
 
@@ -97,6 +106,7 @@ class Screen(object):
                                           raw_img, pitch= -(SCREEN_WIDTH * 3))
         self.window.clear()
         pglimage.blit(0,0)
+        self.bgBatch.draw()
 
         # Sprites: TODO
         pass
