@@ -48,7 +48,7 @@ class Screen(object):
         self.bgBatch = pyglet.graphics.Batch()
         self.bgSprites = [
             # FIXME bad y coordinate
-            [pyglet.sprite.Sprite(dummyImage, x*8, y*8, batch=self.bgBatch)
+            [pyglet.sprite.Sprite(dummyImage, x*8, SCREEN_HEIGHT - y*8, batch=self.bgBatch)
              for y in range(TILE_ROWS)]
             for x in range(TILE_COLUMNS)]
 

@@ -431,16 +431,13 @@ class PPU(object):
                 self.bgpalette = paletteData
 
                 # ppucache's stuff
-                pglimage = self.cache.pglFetchBgTile(
+                pglimage = self.cache.pglBgTile(
                     base = self.bgPatternTableAddr,
                     tile = ptabTile,
                     bg = self.universalBg,
                     paletteData = paletteData)
-                if pglimage is not self.pgscreen.bgSprites[tilecolumn][tilerow].image:
-                    self.pgscreen.bgSprites[tilecolumn][tilerow].image = pglimage
-                else:
-                    print "didnt update bg sprite"
-
+                self.pgscreen.bgSprites[tilecolumn][tilerow].image = pglimage
+                assert (self.pgscreen.bgSprites[tilecolumn][tilerow]._texture.id == pglimage.id)
 
             finex = column % 8
             # most significant bit is leftmost bit
