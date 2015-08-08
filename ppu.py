@@ -336,7 +336,7 @@ class PPU(object):
                 verticalMirror = bool(attributes & 0x80)
 
                 # TODO no magic numbers
-                paletteAddr = 0x3F01 + (spritePalette * 4)
+                paletteAddr = 0x3F11 + (spritePalette * 4)
                 paletteData = [ord(self.cpu.mem.ppuRead(paletteAddr)),
                                ord(self.cpu.mem.ppuRead(paletteAddr+1)),
                                ord(self.cpu.mem.ppuRead(paletteAddr+2))]
