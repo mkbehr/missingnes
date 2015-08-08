@@ -311,6 +311,48 @@ class PPU(object):
         elif (self.scanline, self.cycle) == VBLANK_END:
             self.vblank = 0
 
+        if self.scanline == 0 and self.cycle == 0:
+            # TODO maybe this should just be done at vblank_end? Also should probably process background here too?
+            for sprite_i in range(OAM_SIZE / OAM_ENTRY_SIZE):
+                sprite_oam_base = sprite_i * OAM_ENTRY_SIZE
+                # The first byte of a sprite's entry is one less than
+                # its y-coordinate. (This does mean that sprites can
+                # never be drawn on scanline 0.)
+                spritetop = ord(self.oam[sprite_oam_base]) + 1
+                # TODO account for 8x16 sprites
+
+                # BEGIN caching code
+
+                # Ignoring things like sprite-per-scanline limits,
+                # just run the caching code on every sprite. (However,
+                # OAM is not read-only like sprites, so we'll need to
+                # process more of it here.)
+
+                tileIndex = ord(self.oam[sprite_oam_base+1])
+                attributes = ord(self.oam[sprite_oam_base+2])
+                spriteX = ord(self.oam[sprite_oam_base+3])
+                spritePalette = attributes & 0x3
+                horizontalMirror = bool(attributes & 0x40)
+                verticalMirror = bool(attributes & 0x80)
+
+                # TODO no magic numbers
+                paletteAddr = 0x3F01 + (spritePalette * 4)
+                paletteData = [ord(self.cpu.mem.ppuRead(paletteAddr)),
+                               ord(self.cpu.mem.ppuRead(paletteAddr+1)),
+                               ord(self.cpu.mem.ppuRead(paletteAddr+2))]
+
+                spriteTex = self.cache.spriteTexture(
+                    base = self.spritePatternTableAddr,
+                    tile = tileIndex,
+                    flipH = horizontalMirror,
+                    flipV = verticalMirror,
+                    paletteData = paletteData)
+                self.pgscreen.spriteSprites[sprite_i].image = spriteTex
+                self.pgscreen.spriteSprites[sprite_i].x = spriteX
+                self.pgscreen.spriteSprites[sprite_i].y = (VISIBLE_SCANLINES) - spritetop - 8
+                # END caching code
+
+
         # If we're at the start of a visible scanline, determine which
         # sprites we'll be drawing this line.
         if self.scanline < VISIBLE_SCANLINES and self.cycle == 0:

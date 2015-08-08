@@ -33,23 +33,27 @@ SCREEN_HEIGHT = ppu.VISIBLE_SCANLINES
 
 class Screen(object):
 
-    def __init__(self, ppu):
+    def __init__(self, _ppu): # underscore to patch over sloppy naming hiding the ppu module
 
-        self.ppu = ppu
-        
+        self.ppu = _ppu
+
         self.window = pyglet.window.Window(width=SCREEN_WIDTH, height=SCREEN_HEIGHT)
         self.window.on_draw = self.on_draw
 
         self.keys = key.KeyStateHandler()
         self.window.push_handlers(self.keys)
 
-        dummyImage = pyglet.image.ImageData(1, 1, 'L', "\x00", pitch= 1)
+        dummyImage = pyglet.image.ImageData(1, 1, 'RGBA', "\x00\x00\x00\x00", pitch= 4)
 
         self.bgBatch = pyglet.graphics.Batch()
         self.bgSprites = [
             [pyglet.sprite.Sprite(dummyImage, x*8, SCREEN_HEIGHT - y*8 - 8, batch=self.bgBatch)
              for y in range(TILE_ROWS)]
             for x in range(TILE_COLUMNS)]
+
+        self.spriteBatch = pyglet.graphics.Batch()
+        self.spriteSprites = [pyglet.sprite.Sprite(dummyImage, 0, 0, batch=self.spriteBatch)
+                              for sprite_i in range(ppu.OAM_SIZE / ppu.OAM_ENTRY_SIZE)]
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         pyglet.clock.tick()
@@ -106,6 +110,8 @@ class Screen(object):
         self.window.clear()
         pglimage.blit(0,0)
         self.bgBatch.draw()
+        self.spriteBatch.draw()
+
 
         # Sprites: TODO
         pass
