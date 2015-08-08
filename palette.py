@@ -25,6 +25,11 @@ PALETTE = np.array([
 
 PALETTE_BYTES = PALETTE[:].tobytes()
 
+# some ugly code here as I figure out the best format to have this in
+RGBA_PALETTE_BYTEENTRIES = []
+for (r,g,b) in PALETTE:
+    RGBA_PALETTE_BYTEENTRIES.append(chr(r) + chr(g) + chr(b) + chr(255))
+
 def palette(index):
     return PALETTE[index,:]
 
