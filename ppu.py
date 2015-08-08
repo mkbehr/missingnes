@@ -347,7 +347,7 @@ class PPU(object):
                     flipH = horizontalMirror,
                     flipV = verticalMirror,
                     paletteData = paletteData)
-                self.pgscreen.spriteSprites[sprite_i].image = spriteTex
+                self.pgscreen.spriteSprites[sprite_i]._set_texture(spriteTex)
                 self.pgscreen.spriteSprites[sprite_i].x = spriteX
                 self.pgscreen.spriteSprites[sprite_i].y = (VISIBLE_SCANLINES) - spritetop - 8
                 # END caching code
@@ -430,7 +430,7 @@ class PPU(object):
                     tile = ptabTile,
                     bg = self.universalBg,
                     paletteData = paletteData)
-                self.pgscreen.bgSprites[tilecolumn][tilerow].image = pglimage
+                self.pgscreen.bgSprites[tilecolumn][tilerow]._set_texture(pglimage)
                 assert (self.pgscreen.bgSprites[tilecolumn][tilerow]._texture.id == pglimage.id)
 
         self.cycle = (self.cycle + 1) % CYCLES
