@@ -352,64 +352,16 @@ class PPU(object):
                 self.pgscreen.spriteSprites[sprite_i].y = (VISIBLE_SCANLINES) - spritetop - 8
                 # END caching code
 
+                # TODO emulate sprite overflow, including batshit behavior documented
+                # here:
+                # http://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
 
-        # If we're at the start of a visible scanline, determine which
-        # sprites we'll be drawing this line.
-        if self.scanline < VISIBLE_SCANLINES and self.cycle == 0:
-            # first reset state for the scanline
-            self.spriteOverflow = 0
-            self.spritesThisScanline = [None for i in range(MAX_SPRITES)]
-            self.nSpritesThisScanline = 0
-
-            # Now scan through OAM and find sprites to draw on this
-            # line. If this becomes slow, some indexing of oam could
-            # make it faster. But while testing, scanning through OAM
-            # once per scanline had negligible effect on speed.
-            for sprite_i in range(OAM_SIZE / OAM_ENTRY_SIZE):
-                sprite_oam_base = sprite_i * OAM_ENTRY_SIZE
-                # The first byte of a sprite's entry is one less than
-                # its y-coordinate. (This does mean that sprites can
-                # never be drawn on scanline 0.)
-                spritetop = ord(self.oam[sprite_oam_base]) + 1
-                # TODO account for 8x16 sprites
-                if spritetop <= self.scanline < (spritetop + 8):
-                    if self.nSpritesThisScanline < MAX_SPRITES:
-                        # construct SpriteRow object
-                        tileIndex = ord(self.oam[sprite_oam_base+1])
-                        attributes = ord(self.oam[sprite_oam_base+2])
-                        spriteX = ord(self.oam[sprite_oam_base+3])
-                        finey = self.scanline - spritetop # row - spritetop
-                        if attributes & 0x80: # vertical mirroring
-                            finey = 7 - finey
-                        spritePalette = attributes & 0x3
-                        horizontalMirror = bool(attributes & 0x40)
-                        priority = bool(attributes & 0x20)
-                        (lowcolor, highcolor) = self.readPtab(
-                            base = self.spritePatternTableAddr,
-                            finey = finey,
-                            tile = tileIndex)
-                        spriteRow = sprite.SpriteRow(index = sprite_i,
-                                                     x = spriteX,
-                                                     lowcolor = lowcolor,
-                                                     highcolor = highcolor,
-                                                     palette = spritePalette,
-                                                     horizontalMirror = horizontalMirror,
-                                                     priority = priority)
-                        self.spritesThisScanline[self.nSpritesThisScanline] = spriteRow
-                        self.nSpritesThisScanline += 1
-                    else:
-                        # TODO emulate batshit behavior documented
-                        # here:
-                        # http://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
-                        self.spriteOverflow = 1
+        # TODO check for sprite hits
+        if False:
+            self.sprite0hit = 1
 
         # if we're on a visible pixel, draw that pixel
         if self.scanline < VISIBLE_SCANLINES and self.cycle < VISIBLE_COLUMNS:
-            # TODO: get tile caching to work with sprites. Once that
-            # works, we'll look at the value of
-            # self.redrawtile[self.cycle/8, self.scanline/8]
-            # to determine whether we need to redraw.
-
             ## BACKGROUND
 
             # Grab data from nametable to find pattern table
@@ -481,80 +433,11 @@ class PPU(object):
                 self.pgscreen.bgSprites[tilecolumn][tilerow].image = pglimage
                 assert (self.pgscreen.bgSprites[tilecolumn][tilerow]._texture.id == pglimage.id)
 
-            finex = column % 8
-            # most significant bit is leftmost bit
-            finexbit = 7 - finex
-
-            pixelbit0 = (self.bglowbyte >> finexbit) & 0x1
-            pixelbit1 = (self.bghighbyte >> finexbit) & 0x1
-            colorindex = pixelbit0 + pixelbit1 * 2
-
-            # grayscale
-            if self.grayscale:
-                colorindex &= 0x30
-
-            # look up a color from the attribute tables
-
-            drawBkg = (colorindex == 0) or (not self.showBkg) or (not self.leftBkg and column < 8)
-
-            if drawBkg:
-                self.screenarray[column, row] = self.universalBg
-                self.bkgOpacity[column, row] = False
-            else:
-                self.screenarray[column, row] = self.bgpalette[colorindex-1]
-                self.bkgOpacity[column, row] = True
-
-            ## SPRITES
-
-            # Looping through all our sprites every pixel like this
-            # comes with a slight speed hit. But we can optimize
-            # it. TODO: that.
-            for sprite_i in range(self.nSpritesThisScanline):
-                spriteRow = self.spritesThisScanline[sprite_i]
-                sprite_x = spriteRow.x
-                if sprite_x <= column < sprite_x + 8:
-                    finex = column - sprite_x
-                    if not spriteRow.horizontalMirror:
-                        finexbit = 7 - finex
-                    else:
-                        finexbit = finex
-                    pixelbit0 = (spriteRow.lowcolor >> finexbit) & 0x1
-                    pixelbit1 = (spriteRow.highcolor >> finexbit) & 0x1
-                    colorindex = pixelbit0 + pixelbit1 * 2
-                    if self.grayscale:
-                        colorindex &= 0x30
-                    drawSprite = not ((colorindex == 0) or (not self.showSprites) or (not self.leftSprites and column < 8))
-                    if drawSprite:
-                        if spriteRow.priority == 0: # front priority
-                            # TODO no magic numbers
-                            paletteAddr = 0x3F11 + spriteRow.palette * 4
-                            # TODO test to see whether caching this read
-                            # could give performance increases
-                            color = ord(self.cpu.mem.ppuRead(paletteAddr+(colorindex-1)))
-                            self.screenarray[column,row] = color
-                        # Regardless, check for sprite 0 hits
-                        if spriteRow.index == 0 and column != 255:
-                            self.sprite0Hit = 1
-                        break # even if this was a background sprite, we're done with sprites this pixel
-
-            if (DRAW_GRID and ((row % 8) == 0 or (column % 8) == 0)):
-                self.screenarray[column,row] = 0x30 # white(ish)
-            if (DRAW_GRID and ((row % 32) == 0 or (column % 32) == 0)):
-                self.screenarray[column,row] = 0x16 # red
-
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:
             self.scanline = (self.scanline + 1) % SCANLINES
             if self.scanline == 0:
                 self.frame += 1
-                # update our tiles to redraw: note that it's important
-                # that this happens here, right at the end of vblank,
-                # so that changes during vblank will be reflected
-                self.redrawtile = self.nextredrawtile
-                # now, cache everything unless we know otherwise
-                self.nextredrawtile = np.zeros((VISIBLE_COLUMNS/8,
-                                                VISIBLE_SCANLINES/8),
-                                               dtype='bool')
                 # TODO: if the VRAM address points to something in
                 # $3f00-$3fff, set universalBg to that instead of
                 # $3f00 (though for exact behavior, this should
@@ -574,12 +457,12 @@ class PPU(object):
 
     def flushBgCache(self):
         # Clear our background tile cache: we'll redraw the whole
-        # background next frame.
-        self.nextredrawtile = np.invert(
-            np.zeros((VISIBLE_COLUMNS/8, VISIBLE_SCANLINES/8),
-                     dtype='bool'))
+        # background next frame. Currently this does nothing.
+        pass
 
     def flushBgTile(self, tileX, tileY):
+        # Currently this does nothing.
+
         # Clear our background tile cache for a single tile. This
         # should be called when we write to the PPU nametable address
         # corresponding to our active nametable. For now I'm going to
@@ -589,7 +472,7 @@ class PPU(object):
 
         # first make sure we're not actually writing to the attribute table
         if tileY < VISIBLE_SCANLINES / 8:
-            self.nextredrawtile[tileX, tileY] = True
+            pass
         else:
             # if we are, just flush everything to be safe
             self.flushBgCache()

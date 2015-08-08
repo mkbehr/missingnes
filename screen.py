@@ -86,32 +86,8 @@ class Screen(object):
         ips[7] = self.keys[key.RIGHT]
 
     def on_draw(self):
-        # Background: draw each background tile.
-
-        # There are ppu.VISIBLE_SCANLINES/8 rows of tiles and
-        # ppu.VISIBLE_COLUMNS/8 columns. Each tile is 8*8 pixels.
-
-        # Actually, let's start by just drawing the thing to screen
-        # like we do now. Then we can speed it up.
-
-
-        # working off the numpy array we store in the ppu for now
-        np_img = self.ppu.screenarray.T.tobytes()
-
-        # use PIL for fast palette conversion (but this is still
-        # significantly slower than without the palette)
-        pil_img = Image.frombytes('P', self.ppu.screenarray.shape, np_img)
-        pil_img.putpalette(palette.PALETTE_BYTES)
-
-        raw_img = pil_img.convert('RGB').tobytes()
-
-        pglimage = pyglet.image.ImageData(SCREEN_WIDTH, SCREEN_HEIGHT, 'RGB',
-                                          raw_img, pitch= -(SCREEN_WIDTH * 3))
+        (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
+        pyglet.gl.glClearColor(bg_r, bg_g, bg_b, 255)
         self.window.clear()
-        pglimage.blit(0,0)
         self.bgBatch.draw()
         self.spriteBatch.draw()
-
-
-        # Sprites: TODO
-        pass
