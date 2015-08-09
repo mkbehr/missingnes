@@ -121,7 +121,7 @@ class Screen(object):
         # I hate python gl bindings
         pyglet.gl.glGenVertexArrays(1, ctypes.byref(vao_id))
         pyglet.gl.glBindVertexArray(vao_id.value)
-        
+
         vertexShaderSrc = """#version 150
 
         in vec2 position;
@@ -150,6 +150,13 @@ class Screen(object):
         }"""
         fragmentShader = shaders.compileShader(fragmentShaderSrc, GL_FRAGMENT_SHADER)
         self.shader = shaders.compileProgram(vertexShader, fragmentShader)
+
+        # positionAttrib = glGetAttribLocation(self.shader, "position")
+        # glVertexAttribPointer(positionAttrib, 2, GL_FLOAT, GL_FALSE, 2, ctypes.c_void_p(0))
+        # glEnableVertexAttribArray(positionAttrib)
+        # texcoordAttrib = glGetAttribLocation(self.shader, "texcoord")
+        # glVertexAttribPointer(texcoordAttrib, 2, GL_FLOAT, GL_FALSE, 2, ctypes.c_void_p(2))
+        # glEnableVertexAttribArray(texcoordAttrib)
         
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
