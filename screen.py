@@ -4,9 +4,11 @@ to ppu.py's controller, let's say. (or is that the model? should we
 have more separation?)
 
 """
+import ctypes
 
 import pyglet
 from pyglet.window import key
+from pyglet.gl import *
 
 from PIL import Image
 import numpy as np
@@ -37,7 +39,9 @@ class Screen(object):
 
         self.ppu = _ppu
 
-        self.window = pyglet.window.Window(width=SCREEN_WIDTH, height=SCREEN_HEIGHT)
+        config = pyglet.gl.Config(major_version=3, minor_version=0)
+
+        self.window = pyglet.window.Window(config = config, width=SCREEN_WIDTH, height=SCREEN_HEIGHT)
         self.window.on_draw = self.on_draw
 
         self.keys = key.KeyStateHandler()
@@ -45,15 +49,117 @@ class Screen(object):
 
         dummyImage = pyglet.image.ImageData(1, 1, 'RGBA', "\x00\x00\x00\x00", pitch= 4)
 
+        # playing around with possible ways of drawing things quickly
         self.bgBatch = pyglet.graphics.Batch()
         self.bgSprites = [
             [pyglet.sprite.Sprite(dummyImage, x*8, SCREEN_HEIGHT - y*8 - 8, batch=self.bgBatch)
              for y in range(TILE_ROWS)]
             for x in range(TILE_COLUMNS)]
+        self.bgTiles = [
+            [dummyImage for y in range(TILE_ROWS)]
+            for x in range(TILE_COLUMNS)]
+        self.bgTextureNames = [
+            # I don't really know what I'm doing here
+            [GLuint(0) for y in range(TILE_ROWS)]
+            for x in range(TILE_COLUMNS)]
+        for x in xrange(TILE_COLUMNS):
+            for y in xrange(TILE_ROWS):
+                glGenTextures(1, ctypes.byref(self.bgTextureNames[x][y]))
+                glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y].value)
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, "\x00\x00\x00\x00")
+        self.bgVbos = [
+            [GLuint(0) for y in range(TILE_ROWS)]
+            for x in range(TILE_COLUMNS)]
+        for x in xrange(TILE_COLUMNS):
+            for y in xrange(TILE_ROWS):
+                glGenBuffers(1, ctypes.byref(self.bgVbos[x][y]))
+                glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[x][y].value)
+                left = x * 8.0 / SCREEN_WIDTH
+                right = (x * 8.0 + 1.0) / SCREEN_WIDTH
+                # are top and bottom right here? WHO KNOWS
+                bottom = (SCREEN_HEIGHT - y*8.0 - 8.0) / SCREEN_WIDTH
+                top = (SCREEN_HEIGHT - y*8.0) / SCREEN_WIDTH
+                vertexList = [
+                    left, bottom, 0.0, 0.0,
+                    right, bottom, 1.0, 0.0,
+                    right, top, 1.0, 1.0,
+                    left, top, 0.0, 1.0
+                    ]
+                vertexFloats = (ctypes.c_float * len(vertexList)) (*vertexList)
+                glBufferData(GL_ARRAY_BUFFER, len(vertexList), vertexFloats, GL_STATIC_DRAW)
 
         self.spriteBatch = pyglet.graphics.Batch()
         self.spriteSprites = [pyglet.sprite.Sprite(dummyImage, 0, 0, batch=self.spriteBatch)
                               for sprite_i in range(ppu.OAM_SIZE / ppu.OAM_ENTRY_SIZE)]
+
+        vertexShaderSrc = """#version 150
+
+        in vec2 position;
+        in vec2 texcoord;
+
+        out vec2 Texcoord;
+
+        void main()
+        {
+          gl_Position = vec4(position, 0.0, 1.0);
+          Texcoord = texcoord;
+        }"""
+
+        # no no no, the texture input can't be uniform. Or maybe it
+        # can? No, okay, I think "within a rendering call" means
+        # that's fine.
+        fragmentShaderSrc = """#version 150
+
+        in vec2 Texcoord;
+
+        out vec4 outColor;
+
+        uniform sampler2D tex;
+
+        void main()
+        {
+          outColor = texture(tex, Texcoord);
+        }"""
+
+        vertexShader = GLuint(glCreateShader(GL_VERTEX_SHADER))
+        vSrcBuf = ctypes.create_string_buffer(vertexShaderSrc)
+        glShaderSource(vertexShader.value, 1,
+                       ctypes.cast(ctypes.pointer(ctypes.pointer(vSrcBuf)),
+                                   ctypes.POINTER(ctypes.POINTER(GLchar))),
+                       None)
+        glCompileShader(vertexShader.value)
+
+        glStatus = GLint()
+        glGetShaderiv(vertexShader.value, GL_COMPILE_STATUS, ctypes.byref(glStatus))
+        if glStatus.value != GL_TRUE:
+            errbuf = ctypes.create_string_buffer(512)
+            glGetShaderInfoLog(vertexShader.value, 512, None, errbuf)
+            print errbuf.value # TODO make this a proper debug message
+        assert(glStatus.value == GL_TRUE)
+
+        fragmentShader = GLuint(glCreateShader(GL_FRAGMENT_SHADER))
+        fSrcBuf = ctypes.create_string_buffer(fragmentShaderSrc)
+        glShaderSource(fragmentShader.value, 1,
+                       ctypes.cast(ctypes.pointer(ctypes.pointer(fSrcBuf)),
+                                   ctypes.POINTER(ctypes.POINTER(GLchar))),
+                       None)
+        glCompileShader(fragmentShader.value)
+
+        glGetShaderiv(fragmentShader.value, GL_COMPILE_STATUS, ctypes.byref(glStatus))
+        if glStatus.value != GL_TRUE:
+            errbuf = ctypes.create_string_buffer(512)
+            glGetShaderInfoLog(fragmentShader.value, 512, None, errbuf)
+            print errbuf.value # TODO make this a proper debug message
+        assert(glStatus.value == GL_TRUE)
+
+        shaderProgram = glCreateProgram()
+        self.shaderProgram = shaderProgram
+        glAttachShader(shaderProgram, vertexShader.value)
+        glAttachShader(shaderProgram, fragmentShader.value)
+
+        glLinkProgram(shaderProgram)
+        glUseProgram(shaderProgram)
+        
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         pyglet.clock.tick()
@@ -89,5 +195,16 @@ class Screen(object):
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
         pyglet.gl.glClearColor(bg_r, bg_g, bg_b, 255)
         self.window.clear()
-        self.bgBatch.draw()
+        # self.bgBatch.draw()
+        # for x in xrange(TILE_COLUMNS):
+        #     for y in xrange(TILE_ROWS):
+        #         self.bgTiles[x][y].blit(x*8, SCREEN_HEIGHT - y*8 - 8)
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glUseProgram(self.shaderProgram)
+        for x in xrange(TILE_COLUMNS):
+            for y in xrange(TILE_ROWS):
+                glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y].value)
+                # TODO draw the texture
         self.spriteBatch.draw()
