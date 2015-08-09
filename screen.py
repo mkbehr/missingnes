@@ -8,7 +8,14 @@ import ctypes
 
 import pyglet
 from pyglet.window import key
-from pyglet.gl import *
+#from pyglet.gl import *
+
+from OpenGL.GL import *
+from OpenGL.arrays import vbo
+from OpenGLContext.arrays import *
+from OpenGL.GL import shaders
+
+import glfw
 
 from PIL import Image
 import numpy as np
@@ -39,59 +46,76 @@ class Screen(object):
 
         self.ppu = _ppu
 
-        config = pyglet.gl.Config(major_version=3, minor_version=0)
+        # config = pyglet.gl.Config(major_version=3, minor_version=0)
 
-        self.window = pyglet.window.Window(config = config, width=SCREEN_WIDTH, height=SCREEN_HEIGHT)
-        self.window.on_draw = self.on_draw
+        # self.window = pyglet.window.Window(config = config, width=SCREEN_WIDTH, height=SCREEN_HEIGHT)
+        # self.window.on_draw = self.on_draw
 
-        self.keys = key.KeyStateHandler()
-        self.window.push_handlers(self.keys)
+        # self.keys = key.KeyStateHandler()
+        # self.window.push_handlers(self.keys)
 
-        dummyImage = pyglet.image.ImageData(1, 1, 'RGBA', "\x00\x00\x00\x00", pitch= 4)
+        # dummyImage = pyglet.image.ImageData(1, 1, 'RGBA', "\x00\x00\x00\x00", pitch= 4)
 
-        # playing around with possible ways of drawing things quickly
-        self.bgBatch = pyglet.graphics.Batch()
-        self.bgSprites = [
-            [pyglet.sprite.Sprite(dummyImage, x*8, SCREEN_HEIGHT - y*8 - 8, batch=self.bgBatch)
-             for y in range(TILE_ROWS)]
-            for x in range(TILE_COLUMNS)]
-        self.bgTiles = [
-            [dummyImage for y in range(TILE_ROWS)]
-            for x in range(TILE_COLUMNS)]
-        self.bgTextureNames = [
-            # I don't really know what I'm doing here
-            [GLuint(0) for y in range(TILE_ROWS)]
-            for x in range(TILE_COLUMNS)]
-        for x in xrange(TILE_COLUMNS):
-            for y in xrange(TILE_ROWS):
-                glGenTextures(1, ctypes.byref(self.bgTextureNames[x][y]))
-                glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y].value)
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, "\x00\x00\x00\x00")
-        self.bgVbos = [
-            [GLuint(0) for y in range(TILE_ROWS)]
-            for x in range(TILE_COLUMNS)]
-        for x in xrange(TILE_COLUMNS):
-            for y in xrange(TILE_ROWS):
-                glGenBuffers(1, ctypes.byref(self.bgVbos[x][y]))
-                glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[x][y].value)
-                left = x * 8.0 / SCREEN_WIDTH
-                right = (x * 8.0 + 1.0) / SCREEN_WIDTH
-                # are top and bottom right here? WHO KNOWS
-                bottom = (SCREEN_HEIGHT - y*8.0 - 8.0) / SCREEN_WIDTH
-                top = (SCREEN_HEIGHT - y*8.0) / SCREEN_WIDTH
-                vertexList = [
-                    left, bottom, 0.0, 0.0,
-                    right, bottom, 1.0, 0.0,
-                    right, top, 1.0, 1.0,
-                    left, top, 0.0, 1.0
-                    ]
-                vertexFloats = (ctypes.c_float * len(vertexList)) (*vertexList)
-                glBufferData(GL_ARRAY_BUFFER, len(vertexList), vertexFloats, GL_STATIC_DRAW)
+        # # playing around with possible ways of drawing things quickly
+        # self.bgBatch = pyglet.graphics.Batch()
+        # self.bgSprites = [
+        #     [pyglet.sprite.Sprite(dummyImage, x*8, SCREEN_HEIGHT - y*8 - 8, batch=self.bgBatch)
+        #      for y in range(TILE_ROWS)]
+        #     for x in range(TILE_COLUMNS)]
+        # self.bgTiles = [
+        #     [dummyImage for y in range(TILE_ROWS)]
+        #     for x in range(TILE_COLUMNS)]
+        # self.bgTextureNames = [
+        #     # I don't really know what I'm doing here
+        #     [GLuint(0) for y in range(TILE_ROWS)]
+        #     for x in range(TILE_COLUMNS)]
+        # for x in xrange(TILE_COLUMNS):
+        #     for y in xrange(TILE_ROWS):
+        #         glGenTextures(1, ctypes.byref(self.bgTextureNames[x][y]))
+        #         glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y].value)
+        #         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, "\x00\x00\x00\x00")
+        # self.bgVbos = [
+        #     [GLuint(0) for y in range(TILE_ROWS)]
+        #     for x in range(TILE_COLUMNS)]
+        # for x in xrange(TILE_COLUMNS):
+        #     for y in xrange(TILE_ROWS):
+        #         glGenBuffers(1, ctypes.byref(self.bgVbos[x][y]))
+        #         glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[x][y].value)
+        #         left = x * 8.0 / SCREEN_WIDTH
+        #         right = (x * 8.0 + 1.0) / SCREEN_WIDTH
+        #         # are top and bottom right here? WHO KNOWS
+        #         bottom = (SCREEN_HEIGHT - y*8.0 - 8.0) / SCREEN_WIDTH
+        #         top = (SCREEN_HEIGHT - y*8.0) / SCREEN_WIDTH
+        #         vertexList = [
+        #             left, bottom, 0.0, 0.0,
+        #             right, bottom, 1.0, 0.0,
+        #             right, top, 1.0, 1.0,
+        #             left, top, 0.0, 1.0
+        #             ]
+        #         vertexFloats = (ctypes.c_float * len(vertexList)) (*vertexList)
+        #         glBufferData(GL_ARRAY_BUFFER, len(vertexList), vertexFloats, GL_STATIC_DRAW)
 
-        self.spriteBatch = pyglet.graphics.Batch()
-        self.spriteSprites = [pyglet.sprite.Sprite(dummyImage, 0, 0, batch=self.spriteBatch)
-                              for sprite_i in range(ppu.OAM_SIZE / ppu.OAM_ENTRY_SIZE)]
+        # self.spriteBatch = pyglet.graphics.Batch()
+        # self.spriteSprites = [pyglet.sprite.Sprite(dummyImage, 0, 0, batch=self.spriteBatch)
+        #                       for sprite_i in range(ppu.OAM_SIZE / ppu.OAM_ENTRY_SIZE)]
 
+        # TODO glfw stuff?
+
+        if not glfw.init():
+            assert(false) # fuck it
+
+        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3);
+        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 2);
+        glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, GL_TRUE);
+        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE);
+            
+        window = glfw.create_window(SCREEN_WIDTH, SCREEN_HEIGHT, "Hello World", None, None)
+        
+        if not window:
+            glfw.terminate()
+
+        assert (glfw.get_window_attrib(window, glfw.CONTEXT_VERSION_MAJOR) >= 3)
+        
         vertexShaderSrc = """#version 150
 
         in vec2 position;
@@ -104,10 +128,8 @@ class Screen(object):
           gl_Position = vec4(position, 0.0, 1.0);
           Texcoord = texcoord;
         }"""
+        vertexShader = shaders.compileShader(vertexShaderSrc, GL_VERTEX_SHADER)
 
-        # no no no, the texture input can't be uniform. Or maybe it
-        # can? No, okay, I think "within a rendering call" means
-        # that's fine.
         fragmentShaderSrc = """#version 150
 
         in vec2 Texcoord;
@@ -120,48 +142,12 @@ class Screen(object):
         {
           outColor = texture(tex, Texcoord);
         }"""
-
-        vertexShader = GLuint(glCreateShader(GL_VERTEX_SHADER))
-        vSrcBuf = ctypes.create_string_buffer(vertexShaderSrc)
-        glShaderSource(vertexShader.value, 1,
-                       ctypes.cast(ctypes.pointer(ctypes.pointer(vSrcBuf)),
-                                   ctypes.POINTER(ctypes.POINTER(GLchar))),
-                       None)
-        glCompileShader(vertexShader.value)
-
-        glStatus = GLint()
-        glGetShaderiv(vertexShader.value, GL_COMPILE_STATUS, ctypes.byref(glStatus))
-        if glStatus.value != GL_TRUE:
-            errbuf = ctypes.create_string_buffer(512)
-            glGetShaderInfoLog(vertexShader.value, 512, None, errbuf)
-            print errbuf.value # TODO make this a proper debug message
-        assert(glStatus.value == GL_TRUE)
-
-        fragmentShader = GLuint(glCreateShader(GL_FRAGMENT_SHADER))
-        fSrcBuf = ctypes.create_string_buffer(fragmentShaderSrc)
-        glShaderSource(fragmentShader.value, 1,
-                       ctypes.cast(ctypes.pointer(ctypes.pointer(fSrcBuf)),
-                                   ctypes.POINTER(ctypes.POINTER(GLchar))),
-                       None)
-        glCompileShader(fragmentShader.value)
-
-        glGetShaderiv(fragmentShader.value, GL_COMPILE_STATUS, ctypes.byref(glStatus))
-        if glStatus.value != GL_TRUE:
-            errbuf = ctypes.create_string_buffer(512)
-            glGetShaderInfoLog(fragmentShader.value, 512, None, errbuf)
-            print errbuf.value # TODO make this a proper debug message
-        assert(glStatus.value == GL_TRUE)
-
-        shaderProgram = glCreateProgram()
-        self.shaderProgram = shaderProgram
-        glAttachShader(shaderProgram, vertexShader.value)
-        glAttachShader(shaderProgram, fragmentShader.value)
-
-        glLinkProgram(shaderProgram)
-        glUseProgram(shaderProgram)
+        fragmentShader = shaders.compileShader(fragmentShaderSrc, GL_FRAGMENT_SHADER)
+        self.shader = shaders.compileProgram(vertexShader, fragmentShader)
         
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
+        return
         pyglet.clock.tick()
 
         for window in pyglet.app.windows:
