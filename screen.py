@@ -9,11 +9,12 @@ import ctypes
 import pyglet
 from pyglet.window import key
 #from pyglet.gl import *
+import pyglet.gl
 
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
-from OpenGLContext.arrays import *
 from OpenGL.GL import shaders
+from OpenGL.GL.ARB import vertex_array_object # I don't know
 
 import glfw
 
@@ -115,6 +116,11 @@ class Screen(object):
             glfw.terminate()
 
         assert (glfw.get_window_attrib(window, glfw.CONTEXT_VERSION_MAJOR) >= 3)
+
+        vao_id = GLuint(0)
+        # I hate python gl bindings
+        pyglet.gl.glGenVertexArrays(1, ctypes.byref(vao_id))
+        pyglet.gl.glBindVertexArray(vao_id.value)
         
         vertexShaderSrc = """#version 150
 
