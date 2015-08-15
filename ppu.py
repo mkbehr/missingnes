@@ -347,6 +347,8 @@ class PPU(object):
                     flipH = horizontalMirror,
                     flipV = verticalMirror,
                     paletteData = paletteData)
+                # TODO assign texture to tile
+                
                 # self.pgscreen.spriteSprites[sprite_i]._set_texture(spriteTex)
                 # self.pgscreen.spriteSprites[sprite_i].x = spriteX
                 # self.pgscreen.spriteSprites[sprite_i].y = (VISIBLE_SCANLINES) - spritetop - 8
@@ -425,14 +427,16 @@ class PPU(object):
                 self.bgpalette = paletteData
 
                 # ppucache's stuff
-                pglimage = self.cache.pglBgTile(
+                bgtile = self.cache.bgTile(
                     base = self.bgPatternTableAddr,
                     tile = ptabTile,
                     bg = self.universalBg,
                     paletteData = paletteData)
+                # TODO do things with bgtile
+                
                 #self.pgscreen.bgSprites[tilecolumn][tilerow]._set_texture(pglimage)
                 #assert (self.pgscreen.bgSprites[tilecolumn][tilerow]._texture.id == pglimage.id)
-                self.pgscreen.bgTiles[tilecolumn][tilerow] = pglimage
+                #self.pgscreen.bgTiles[tilecolumn][tilerow] = pglimage
 
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:

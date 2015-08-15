@@ -77,8 +77,8 @@ class PPUCache(object):
 
         return contents
 
-    def pglBgTile(self, base, tile, bg, paletteData):
-        """Get the specified tile as a pyglet image, given palette data."""
+    def bgTile(self, base, tile, bg, paletteData):
+        """Get the specified tile as a byte string, given palette data."""
         # TODO bg is probably not a relevant argument anymore
         cacheIndex = (base, tile, bg, paletteData[0], paletteData[1], paletteData[2])
         if cacheIndex not in self.bgTileCache:
@@ -95,13 +95,12 @@ class PPUCache(object):
                 img_bytes[i*4 : (i+1)*4] = '\x00\x00\x00\x00' # transparent
             else:
                 img_bytes[i*4 : (i+1)*4] = palette.RGBA_PALETTE_BYTEENTRIES[paletteData[colorIndex-1]]
-        
-        pglimagedata = pyglet.image.ImageData(8, 8, 'RGBA', str(img_bytes), pitch= -(8 * 4))
-        pgltexture = pglimagedata.get_texture()
-        return pgltexture
+
+        return str(img_bytes)
 
     def spriteTexture(self, base, tile, flipH, flipV, paletteData):
-        """Get the specified sprite as a texture."""
+        """Get the specified sprite as a byte string to be used in a texture."""
+        # FIXME the name is kind of inaccurate now
         cacheIndex = (base, tile, flipH, flipV, paletteData[0], paletteData[1], paletteData[2])
         if cacheIndex not in self.spriteCache:
             self.spriteCache[cacheIndex] = self._fetchSpriteTexture(base, tile, flipH, flipV, paletteData)
@@ -130,6 +129,4 @@ class PPUCache(object):
                     img_bytes[i*4 : (i+1)*4] = palette.RGBA_PALETTE_BYTEENTRIES[paletteData[colorIndex-1]]
                 i += 1
 
-        pglimagedata = pyglet.image.ImageData(8, 8, 'RGBA', str(img_bytes), pitch= -(8 * 4))
-        pgltexture = pglimagedata.get_texture()
-        return pgltexture
+        return str(img_bytes)
