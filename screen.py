@@ -192,8 +192,8 @@ class Screen(object):
 
     def on_draw(self):
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
-        pyglet.gl.glClearColor(bg_r, bg_g, bg_b, 255)
-        self.window.clear()
+        glClearColor(bg_r / 255.0, bg_g / 255.0, bg_b / 255.0, 1.0)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT)
         # self.bgBatch.draw()
         # for x in xrange(TILE_COLUMNS):
         #     for y in xrange(TILE_ROWS):
@@ -207,3 +207,5 @@ class Screen(object):
                 glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y].value)
                 # TODO draw the texture
         self.spriteBatch.draw()
+
+        glfw.swap_buffers(self.window)
