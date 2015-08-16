@@ -159,26 +159,25 @@ class Screen(object):
 
         self.bgTextureNames = [
             # I don't really know what I'm doing here
-            [GLuint(0) for y in range(TILE_ROWS)]
+            [0 for y in range(TILE_ROWS)]
             for x in range(TILE_COLUMNS)]
         for x in xrange(TILE_COLUMNS):
             for y in xrange(TILE_ROWS):
-                glGenTextures(1, ctypes.byref(self.bgTextureNames[x][y]))
-                glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y].value)
+                self.bgTextureNames[x][y] = glGenTextures(1)
+                glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y])
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, "\x00\x00\x00\x00")
         self.bgVbos = [
-            [GLuint(0) for y in range(TILE_ROWS)]
+            [0 for y in range(TILE_ROWS)]
             for x in range(TILE_COLUMNS)]
         for x in xrange(TILE_COLUMNS):
             for y in xrange(TILE_ROWS):
-                glGenBuffers(1, ctypes.byref(self.bgVbos[x][y]))
-                glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[x][y].value)
+                self.bgVbos[x][y] = glGenBuffers(1)
+                glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[x][y])
                 left = x * 8.0 / SCREEN_WIDTH
                 right = ((x+1) * 8.0) / SCREEN_WIDTH
                 # are top and bottom right here? WHO KNOWS
                 bottom = (SCREEN_HEIGHT - y*8.0 - 8.0) / SCREEN_WIDTH
                 top = (SCREEN_HEIGHT - y*8.0) / SCREEN_WIDTH
-                print (bottom, top) # bottom should be less than top, I think
                 # map to coordinates with boundaries of -1 and 1
                 left = left * 2.0 - 1
                 right = right * 2.0 - 1
@@ -228,66 +227,67 @@ class Screen(object):
         ips[7] = self.keys[key.RIGHT]
 
     def on_draw(self):
-        #glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
-        
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
         (bg_r, bg_g, bg_b) = (128,128,128) # DEBUG
         glClearColor(bg_r / 255.0, bg_g / 255.0, bg_b / 255.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT)
-        # self.bgBatch.draw()
-        # for x in xrange(TILE_COLUMNS):
-        #     for y in xrange(TILE_ROWS):
-        #         self.bgTiles[x][y].blit(x*8, SCREEN_HEIGHT - y*8 - 8)
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-        
+
 
         for x in xrange(TILE_COLUMNS):
             for y in xrange(TILE_ROWS):
-                glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y].value)
-                glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[x][y].value)
+                if x == 4 and y == 4:
+                    glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y])
+                    glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[x][y])
 
-                stride = 4 * ctypes.sizeof(ctypes.c_float)
+                    stride = 4 * ctypes.sizeof(ctypes.c_float)
 
-                glVertexAttribPointer(self.positionAttrib, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
-                glEnableVertexAttribArray(self.positionAttrib)
-                glVertexAttribPointer(self.texcoordAttrib, 2, GL_FLOAT, GL_FALSE, stride,
-                                      ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)))
-                glEnableVertexAttribArray(self.texcoordAttrib)
-                glUniform1i(glGetUniformLocation(self.shader, "tex"), 0)
-                glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
-        #self.spriteBatch.draw()
+                    glVertexAttribPointer(self.positionAttrib, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
+                    glEnableVertexAttribArray(self.positionAttrib)
+                    glVertexAttribPointer(self.texcoordAttrib, 2, GL_FLOAT, GL_FALSE, stride,
+                                          ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)))
+                    glEnableVertexAttribArray(self.texcoordAttrib)
+                    glUniform1i(glGetUniformLocation(self.shader, "tex"), 0)
+                    glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
 
         # DEBUG
-        # glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[4][4].value)
-        # glActiveTexture(GL_TEXTURE0)
-        # glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[4][4].value)
+        # glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[4][4])
+        # import pdb; pdb.set_trace()
+
+        # DEBUG
+        # glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[4][4])
+        # glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[4][4])
         # # triangles need to be counterclockwise to be front-facing
-        # right = 0.9
-        # left = -0.9
-        # bottom = -0.9
-        # top = 0.9
-        # vertexList = [
-        #     left, bottom, 0.0, 0.0,
-        #     right, bottom, 1.0, 0.0,
-        #     right, top, 1.0, 1.0,
-        #     left, top, 0.0, 1.0,
-        # ]
-        # vertexFloats = (ctypes.c_float * len(vertexList)) (*vertexList)
-        # glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(vertexFloats), vertexFloats, GL_STATIC_DRAW)
+        # # right = 0.9
+        # # left = -0.9
+        # # bottom = -0.9
+        # # top = 0.9
+        # # vertexList = [
+        # #     left, bottom, 0.0, 0.0,
+        # #     right, bottom, 1.0, 0.0,
+        # #     right, top, 1.0, 1.0,
+        # #     left, top, 0.0, 1.0,
+        # # ]
+        # # vertexFloats = (ctypes.c_float * len(vertexList)) (*vertexList)
+        # # glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(vertexFloats), vertexFloats, GL_STATIC_DRAW)
 
         # stride = 4 * ctypes.sizeof(ctypes.c_float)
-        
+
         # glVertexAttribPointer(self.positionAttrib, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
         # glEnableVertexAttribArray(self.positionAttrib)
         # glVertexAttribPointer(self.texcoordAttrib, 2, GL_FLOAT, GL_FALSE, stride,
         #                       ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)))
         # glEnableVertexAttribArray(self.texcoordAttrib)
+        # print "rendering texture:"
+        # print ''.join("\\x{:02x}".format(ord(c)) for c in
+        #               glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE))
+        # print "buffer data is:"
+        # print glGetBufferSubData(GL_ARRAY_BUFFER, 0, 4*4*ctypes.sizeof(ctypes.c_float))
         # glUniform1i(glGetUniformLocation(self.shader, "tex"), 0)
         # glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
         # END DEBUG
-        
 
         glfw.swap_buffers(self.window)
