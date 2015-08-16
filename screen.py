@@ -15,6 +15,7 @@ from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGL.GL import shaders
 from OpenGL.GL.ARB import vertex_array_object # I don't know
+from OpenGL.GLU import *
 
 import glfw
 
@@ -109,9 +110,10 @@ class Screen(object):
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 2);
         glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, GL_TRUE);
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE);
-            
+
         window = glfw.create_window(SCREEN_WIDTH, SCREEN_HEIGHT, "Hello World", None, None)
-        
+        self.window = window
+
         if not window:
             glfw.terminate()
 
@@ -122,7 +124,7 @@ class Screen(object):
         pyglet.gl.glGenVertexArrays(1, ctypes.byref(vao_id))
         pyglet.gl.glBindVertexArray(vao_id.value)
 
-        vertexShaderSrc = """#version 150
+        vertexShaderSrc = """#version 330
 
         in vec2 position;
         in vec2 texcoord;
@@ -136,7 +138,7 @@ class Screen(object):
         }"""
         vertexShader = shaders.compileShader(vertexShaderSrc, GL_VERTEX_SHADER)
 
-        fragmentShaderSrc = """#version 150
+        fragmentShaderSrc = """#version 330
 
         in vec2 Texcoord;
 
@@ -150,16 +152,51 @@ class Screen(object):
         }"""
         fragmentShader = shaders.compileShader(fragmentShaderSrc, GL_FRAGMENT_SHADER)
         self.shader = shaders.compileProgram(vertexShader, fragmentShader)
+        glUseProgram(self.shader)
 
-        # positionAttrib = glGetAttribLocation(self.shader, "position")
-        # glVertexAttribPointer(positionAttrib, 2, GL_FLOAT, GL_FALSE, 2, ctypes.c_void_p(0))
-        # glEnableVertexAttribArray(positionAttrib)
-        # texcoordAttrib = glGetAttribLocation(self.shader, "texcoord")
-        # glVertexAttribPointer(texcoordAttrib, 2, GL_FLOAT, GL_FALSE, 2, ctypes.c_void_p(2))
-        # glEnableVertexAttribArray(texcoordAttrib)
-        
+        self.positionAttrib = glGetAttribLocation(self.shader, "position")
+        self.texcoordAttrib = glGetAttribLocation(self.shader, "texcoord")
+
+        self.bgTextureNames = [
+            # I don't really know what I'm doing here
+            [GLuint(0) for y in range(TILE_ROWS)]
+            for x in range(TILE_COLUMNS)]
+        for x in xrange(TILE_COLUMNS):
+            for y in xrange(TILE_ROWS):
+                glGenTextures(1, ctypes.byref(self.bgTextureNames[x][y]))
+                glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y].value)
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, "\x00\x00\x00\x00")
+        self.bgVbos = [
+            [GLuint(0) for y in range(TILE_ROWS)]
+            for x in range(TILE_COLUMNS)]
+        for x in xrange(TILE_COLUMNS):
+            for y in xrange(TILE_ROWS):
+                glGenBuffers(1, ctypes.byref(self.bgVbos[x][y]))
+                glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[x][y].value)
+                left = x * 8.0 / SCREEN_WIDTH
+                right = ((x+1) * 8.0) / SCREEN_WIDTH
+                # are top and bottom right here? WHO KNOWS
+                bottom = (SCREEN_HEIGHT - y*8.0 - 8.0) / SCREEN_WIDTH
+                top = (SCREEN_HEIGHT - y*8.0) / SCREEN_WIDTH
+                print (bottom, top) # bottom should be less than top, I think
+                # map to coordinates with boundaries of -1 and 1
+                left = left * 2.0 - 1
+                right = right * 2.0 - 1
+                bottom = bottom * 2.0 - 1
+                top = top * 2.0 - 1
+                # triangles need to be counterclockwise to be front-facing
+                vertexList = [
+                    left, bottom, 0.0, 0.0,
+                    right, bottom, 1.0, 0.0,
+                    right, top, 1.0, 1.0,
+                    left, top, 0.0, 1.0,
+                    ]
+                vertexFloats = (ctypes.c_float * len(vertexList)) (*vertexList)
+                glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(vertexFloats), vertexFloats, GL_STATIC_DRAW)
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
+        self.on_draw()
+
         return
         pyglet.clock.tick()
 
@@ -191,7 +228,10 @@ class Screen(object):
         ips[7] = self.keys[key.RIGHT]
 
     def on_draw(self):
+        #glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+        
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
+        (bg_r, bg_g, bg_b) = (128,128,128) # DEBUG
         glClearColor(bg_r / 255.0, bg_g / 255.0, bg_b / 255.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT)
         # self.bgBatch.draw()
@@ -201,11 +241,53 @@ class Screen(object):
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glUseProgram(self.shaderProgram)
+
+        
+
         for x in xrange(TILE_COLUMNS):
             for y in xrange(TILE_ROWS):
                 glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y].value)
-                # TODO draw the texture
-        self.spriteBatch.draw()
+                glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[x][y].value)
+
+                stride = 4 * ctypes.sizeof(ctypes.c_float)
+
+                glVertexAttribPointer(self.positionAttrib, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
+                glEnableVertexAttribArray(self.positionAttrib)
+                glVertexAttribPointer(self.texcoordAttrib, 2, GL_FLOAT, GL_FALSE, stride,
+                                      ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)))
+                glEnableVertexAttribArray(self.texcoordAttrib)
+                glUniform1i(glGetUniformLocation(self.shader, "tex"), 0)
+                glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
+        #self.spriteBatch.draw()
+
+        # DEBUG
+        # glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[4][4].value)
+        # glActiveTexture(GL_TEXTURE0)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[4][4].value)
+        # # triangles need to be counterclockwise to be front-facing
+        # right = 0.9
+        # left = -0.9
+        # bottom = -0.9
+        # top = 0.9
+        # vertexList = [
+        #     left, bottom, 0.0, 0.0,
+        #     right, bottom, 1.0, 0.0,
+        #     right, top, 1.0, 1.0,
+        #     left, top, 0.0, 1.0,
+        # ]
+        # vertexFloats = (ctypes.c_float * len(vertexList)) (*vertexList)
+        # glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(vertexFloats), vertexFloats, GL_STATIC_DRAW)
+
+        # stride = 4 * ctypes.sizeof(ctypes.c_float)
+        
+        # glVertexAttribPointer(self.positionAttrib, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
+        # glEnableVertexAttribArray(self.positionAttrib)
+        # glVertexAttribPointer(self.texcoordAttrib, 2, GL_FLOAT, GL_FALSE, stride,
+        #                       ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)))
+        # glEnableVertexAttribArray(self.texcoordAttrib)
+        # glUniform1i(glGetUniformLocation(self.shader, "tex"), 0)
+        # glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
+        # END DEBUG
+        
 
         glfw.swap_buffers(self.window)

@@ -5,6 +5,8 @@ import palette
 import ppucache
 import sprite
 
+from OpenGL.GL import * # TODO this file does not want GL code
+
 DRAW_GRID = False
 
 PPU_DEBUG = True
@@ -432,7 +434,9 @@ class PPU(object):
                     tile = ptabTile,
                     bg = self.universalBg,
                     paletteData = paletteData)
-                # TODO do things with bgtile
+                texName = self.pgscreen.bgTextureNames[tilecolumn][tilerow]
+                glBindTexture(GL_TEXTURE_2D, texName.value)
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 8, 8, 0, GL_RGBA, GL_UNSIGNED_BYTE, bgtile)
                 
                 #self.pgscreen.bgSprites[tilecolumn][tilerow]._set_texture(pglimage)
                 #assert (self.pgscreen.bgSprites[tilecolumn][tilerow]._texture.id == pglimage.id)
