@@ -85,20 +85,20 @@ class Screen(object):
         in uvec3 v_tuv;
         in uint v_palette_n;
 
-        out vec3 f_tuv;
+        out vec3 f_uvt;
         //out uint f_palette_n;
 
         void main()
         {
-          gl_Position = vec4(xy, 0.0, 1.0);
-          f_tuv = v_tuv;
+          gl_Position = vec4(xy.x / 256.0, xy.y / 240.0, 0.0, 1.0);
+          f_uvt = vec3(v_tuv.y/8.0, v_tuv.z/8.0, v_tuv.x);
           //f_palette_n = v_palette_n;
         }"""
         vertexShader = shaders.compileShader(vertexShaderSrc, GL_VERTEX_SHADER)
 
         fragmentShaderSrc = """#version 330
 
-        in vec3 f_tuv;
+        in vec3 f_uvt;
         //in int f_palette_n;
 
         out vec4 outColor;
@@ -110,7 +110,7 @@ class Screen(object):
         void main()
         {
           uint localPaletteIndex;
-          localPaletteIndex = texture(patternTable, f_tuv).r;
+          localPaletteIndex = texture(patternTable, f_uvt).r;
           // TODO: we can probably select the local palette in the vertex shader
         /*
           globalPaletteIndex = localPalettes[f_palette_n * 4 + localPaletteIndex];
@@ -198,7 +198,7 @@ class Screen(object):
 
     def on_draw(self):
         glBindBuffer(GL_ARRAY_BUFFER, self.bgVbo)
-        
+
         self.maintainPaletteTable()
         
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
@@ -210,22 +210,22 @@ class Screen(object):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
         # TODO get rid of some of these magic numbers
-        vertices = (ctypes.c_uint * TILE_COLUMNS * TILE_ROWS * 6 * 6)
+        vertexList = [0 for x in range(TILE_COLUMNS * TILE_ROWS * 6 * 6)]
         for x in xrange(TILE_COLUMNS):
             for y in xrange(TILE_ROWS):
-                x_left = x * 8.0 / SCREEN_WIDTH
-                x_right = ((x+1) * 8.0) / SCREEN_WIDTH
-                y_bottom = (SCREEN_HEIGHT - y*8.0 - 8.0) / SCREEN_WIDTH
-                y_top = (SCREEN_HEIGHT - y*8.0) / SCREEN_WIDTH
+                x_left = x * 8
+                x_right = (x+1) * 8
+                y_bottom = (SCREEN_HEIGHT - y*8 - 8)
+                y_top = (SCREEN_HEIGHT - y*8)
                 tile = 0 # TODO: determined by the nametable
                 # TODO see if these uv coordinates are right
-                u_left = 0.0
-                u_right = 1.0
-                v_bottom = 0.0
-                v_top = 1.0
+                u_left = 0
+                u_right = 1
+                v_bottom = 0
+                v_top = 1
                 palette_index = 0 # TODO: determined by the pattern table
                 screen_tile_index = (x + y*TILE_ROWS) * 6*6
-                vertices[screen_tile_index : (screen_tile_index+(6*6))] = [
+                vertexList[screen_tile_index : (screen_tile_index+(6*6))] = [
                     # do this as two triangles
                     # first triangle
                     x_left, y_bottom, tile, u_left, v_bottom, palette_index,
@@ -237,12 +237,14 @@ class Screen(object):
                     x_left, y_top, tile, u_left, v_top, palette_index,
                     ]
 
-                # FIXME: there may be type problems here, because some
-                # of these are floats and some are ints. Probable
-                # solution: just make them all (unsigned) ints.
+        vertices = (ctypes.c_ubyte * (TILE_COLUMNS * TILE_ROWS * 6 * 6)) (*vertexList)
 
-                # FIXME magic number
-                stride = 6 * ctypes.sizeof(ctypes.c_uint)
+        # FIXME: there may be type problems here, because some
+        # of these are floats and some are ints. Probable
+        # solution: just make them all (unsigned) ints. Or floats.
+
+        # FIXME magic number
+        stride = 6 * ctypes.sizeof(ctypes.c_ubyte)
 
         glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(vertices), vertices, GL_DYNAMIC_DRAW)
 
@@ -250,12 +252,12 @@ class Screen(object):
         xyOffset = ctypes.c_void_p(0)
         glVertexAttribPointer(self.xyAttrib, 2, GL_FLOAT, GL_FALSE, stride, xyOffset)
         glEnableVertexAttribArray(self.xyAttrib)
-        tuvOffset = ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_uint))
+        tuvOffset = ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_ubyte))
         glVertexAttribPointer(self.tuvAttrib, 3, GL_FLOAT, GL_FALSE, stride, tuvOffset)
         glEnableVertexAttribArray(self.tuvAttrib)
-        paletteNOffset = ctypes.c_void_p(5 * ctypes.sizeof(ctypes.c_uint))
-        glVertexAttribPointer(self.paletteNAttrib, 1, GL_FLOAT, GL_FALSE, stride, paletteNOffset)
-        glEnableVertexAttribArray(self.paletteNAttrib)
+        # paletteNOffset = ctypes.c_void_p(5 * ctypes.sizeof(ctypes.c_ubyte))
+        # glVertexAttribPointer(self.paletteNAttrib, 1, GL_FLOAT, GL_FALSE, stride, paletteNOffset)
+        # glEnableVertexAttribArray(self.paletteNAttrib)
 
         # TODO point uniform arguments
 
@@ -281,6 +283,6 @@ class Screen(object):
             self.patternTable = self.ppu.dumpPtab(self.ppu.bgPatternTableAddr)
             glBindTexture(GL_TEXTURE_2D_ARRAY, self.bgPtabName)
             glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
-            glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_R8UI, 8, 8, PATTERN_TABLE_TILES,
+            glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RED, 8, 8, PATTERN_TABLE_TILES,
                          0, GL_RED, GL_UNSIGNED_BYTE, self.patternTable)
             self.lastBgPalette = self.ppu.bgPatternTableAddr
