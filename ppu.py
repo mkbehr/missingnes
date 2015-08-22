@@ -494,3 +494,20 @@ class PPU(object):
             # if we are, just flush everything to be safe
             self.flushBgCache()
             pass
+
+    def dumpPtab(self, base):
+        """Returns a string of bytes representing the specified half of the pattern table. The bytes are in a format suitable to be stored in a GL array of 2D textures (GL_TEXTURE_2D_ARRAY)."""
+        # this might be a bit slow for now, but it shouldn't be called
+        # much, at least for early games. If I want to figure out the
+        # details, it should be possible to directly dump the memory
+        # into the string, maybe given some sort of transformation.
+        out = bytearray(256*8*8)
+        for tile in xrange(256):
+            for y in xrange(8):
+                (lowbyte, highbyte) = self.readPtab(base, y, tile)
+                for x in xrange(8):
+                    lowbit = (lowbyte >> (7-x)) & 1
+                    highbit = (highbyte >> (7-x)) & 1
+                    pixel = lowbit + 2 * highbit
+                    out[x + 8*y + 8*8*tile ] = pixel
+        return str(out)
