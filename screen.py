@@ -85,20 +85,20 @@ class Screen(object):
         in vec3 v_tuv;
         in uint v_palette_n;
 
-        out vec3 f_uvt;
+        out vec2 f_uv;
         //out uint f_palette_n;
 
         void main()
         {
           gl_Position = vec4((float(xy.x) / 16.0) - 1, (float(xy.y) / 15.0) - 1, 0.0, 1.0);
-          f_uvt = vec3(float(v_tuv.y), float(v_tuv.z), float(v_tuv.x));
+          f_uv = vec2((float(v_tuv.y) / 256.0) + float(v_tuv.x) / 256.0, float(v_tuv.z));
           //f_palette_n = v_palette_n;
         }"""
         vertexShader = shaders.compileShader(vertexShaderSrc, GL_VERTEX_SHADER)
 
         fragmentShaderSrc = """#version 330
 
-        in vec3 f_uvt;
+        in vec2 f_uv;
         //in int f_palette_n;
 
         out vec4 outColor;
@@ -110,7 +110,7 @@ class Screen(object):
         void main()
         {
           float localPaletteIndex;
-          localPaletteIndex = texture(patternTable, f_uvt.xy).r;
+          localPaletteIndex = texture(patternTable, f_uv).r;
           // TODO: we can probably select the local palette in the vertex shader
         /*
           globalPaletteIndex = localPalettes[f_palette_n * 4 + localPaletteIndex];
@@ -222,12 +222,11 @@ class Screen(object):
                 x_right = x+1
                 y_bottom = (TILE_ROWS - y - 1)
                 y_top = (TILE_ROWS - y)
-                tile = 0 # TODO: determined by the nametable
-                # TODO see if these uv coordinates are right
+                tile = ((x%16)+16*y) % 256 # TODO: determined by the nametable
                 u_left = 0
                 u_right = 1
-                v_bottom = 0
-                v_top = 1
+                v_bottom = 1
+                v_top = 0
                 palette_index = 0 # TODO: determined by the pattern table
                 screen_tile_index = (x + y*TILE_COLUMNS) * 6*6
                 vertexList[screen_tile_index : (screen_tile_index+(6*6))] = [
@@ -288,10 +287,9 @@ class Screen(object):
             self.patternTable = self.ppu.dumpPtab(self.ppu.bgPatternTableAddr)
             # I can't make GL_R8UI work, so everything has to be floats
             patternTableFloats = [float(ord(x)) for x in self.patternTable]
-            print patternTableFloats[:64]
             textureData = (ctypes.c_float * len(patternTableFloats)) (*patternTableFloats)
             glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
             glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8, 8,
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*256, 8,
                          0, GL_RED, GL_FLOAT, textureData)
             self.lastBgPalette = self.ppu.bgPatternTableAddr

@@ -498,7 +498,7 @@ class PPU(object):
             pass
 
     def dumpPtab(self, base):
-        """Returns a string of bytes representing the specified half of the pattern table. The bytes are in a format suitable to be stored in a GL array of 2D textures (GL_TEXTURE_2D_ARRAY)."""
+        """Returns a string of bytes representing the specified half of the pattern table. The bytes are stored in a large atlas texture of dimension 8*256 by 8."""
         # this might be a bit slow for now, but it shouldn't be called
         # much, at least for early games. If I want to figure out the
         # details, it should be possible to directly dump the memory
@@ -511,5 +511,5 @@ class PPU(object):
                     lowbit = (lowbyte >> (7-x)) & 1
                     highbit = (highbyte >> (7-x)) & 1
                     pixel = lowbit + 2 * highbit
-                    out[x + 8*y + 8*8*tile ] = pixel
+                    out[x + 8*256*y + 8*tile] = pixel
         return str(out)
