@@ -25,17 +25,6 @@ import numpy as np
 import palette
 import ppu
 
-# For now, we're going to keep pyglet's redraw interval decoupled from
-# the ppu's frame interval. That's not ideal, but I'll see if it needs
-# fixing once it's done.
-
-# Actually hahaha that's a lie we're going to totally couple them by
-# writing our own pyglet event loop. Pyglet strongly disrecommends
-# this but whatever, we can decouple them later.
-
-# Note: pyglet will eventually handle keyboard input and sound. That
-# might take place in a different file.
-
 TILE_ROWS = ppu.VISIBLE_SCANLINES/8
 TILE_COLUMNS = ppu.VISIBLE_COLUMNS/8
 
@@ -135,43 +124,9 @@ class Screen(object):
 
         self.bgPtabName = glGenTextures(1)
 
-        # TODO bind global palette
+        self.tileIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
 
-        # self.bgTextureNames = [
-        #     # I don't really know what I'm doing here
-        #     [0 for y in range(TILE_ROWS)]
-        #     for x in range(TILE_COLUMNS)]
-        # for x in xrange(TILE_COLUMNS):
-        #     for y in xrange(TILE_ROWS):
-        #         self.bgTextureNames[x][y] = glGenTextures(1)
-        #         glBindTexture(GL_TEXTURE_2D, self.bgTextureNames[x][y])
-        #         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, "\x00\x00\x00\x00")
-        # self.bgVbos = [
-        #     [0 for y in range(TILE_ROWS)]
-        #     for x in range(TILE_COLUMNS)]
-        # for x in xrange(TILE_COLUMNS):
-        #     for y in xrange(TILE_ROWS):
-        #         self.bgVbos[x][y] = glGenBuffers(1)
-        #         glBindBuffer(GL_ARRAY_BUFFER, self.bgVbos[x][y])
-        #         left = x * 8.0 / SCREEN_WIDTH
-        #         right = ((x+1) * 8.0) / SCREEN_WIDTH
-        #         # are top and bottom right here? WHO KNOWS
-        #         bottom = (SCREEN_HEIGHT - y*8.0 - 8.0) / SCREEN_WIDTH
-        #         top = (SCREEN_HEIGHT - y*8.0) / SCREEN_WIDTH
-        #         # map to coordinates with boundaries of -1 and 1
-        #         left = left * 2.0 - 1
-        #         right = right * 2.0 - 1
-        #         bottom = bottom * 2.0 - 1
-        #         top = top * 2.0 - 1
-        #         # triangles need to be counterclockwise to be front-facing
-        #         vertexList = [
-        #             left, bottom, 0.0, 0.0,
-        #             right, bottom, 1.0, 0.0,
-        #             right, top, 1.0, 1.0,
-        #             left, top, 0.0, 1.0,
-        #             ]
-        #         vertexFloats = (ctypes.c_float * len(vertexList)) (*vertexList)
-        #         glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(vertexFloats), vertexFloats, GL_STATIC_DRAW)
+        # TODO bind global palette
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         self.on_draw()
@@ -222,7 +177,7 @@ class Screen(object):
                 x_right = x+1
                 y_bottom = (TILE_ROWS - y - 1)
                 y_top = (TILE_ROWS - y)
-                tile = ((x%16)+16*y) % 256 # TODO: determined by the nametable
+                tile = self.tileIndices[x][y]
                 u_left = 0
                 u_right = 1
                 v_bottom = 1
@@ -243,10 +198,6 @@ class Screen(object):
 
         vertices = (ctypes.c_ubyte * (TILE_COLUMNS * TILE_ROWS * 6 * 6)) (*vertexList)
 
-        # FIXME: there may be type problems here, because some
-        # of these are floats and some are ints. Probable
-        # solution: just make them all (unsigned) ints. Or floats.
-
         # FIXME magic number
         stride = 6 * ctypes.sizeof(ctypes.c_ubyte)
 
@@ -263,12 +214,7 @@ class Screen(object):
         # glVertexAttribIPointer(self.paletteNAttrib, 1, GL_FLOAT, stride, paletteNOffset)
         # glEnableVertexAttribArray(self.paletteNAttrib)
 
-        # TODO point uniform arguments
-
-        # this probably involves making sure that our textures
-        # are bound to particular GL_TEXTURE{foo} and then
-        # passing foo to the TODOs here.
-
+        # point uniform arguments
         glUniform1i(glGetUniformLocation(self.shader, "patternTable"), BG_PATTERN_TABLE_TEXID)
         # glUniform1i(glGetUniformLocation(self.shader, "globalPalette"), TODO)
 

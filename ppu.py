@@ -434,23 +434,9 @@ class PPU(object):
                     tile = ptabTile,
                     bg = self.universalBg,
                     paletteData = paletteData)
-                # if tilecolumn == 4 and tilerow == 4:
-                #     print "binding texture:"
-                #     print ''.join("\\x{:02x}".format(ord(c)) for c in bgtile)
-                # texName = self.pgscreen.bgTextureNames[tilecolumn][tilerow]
-                # if tilecolumn == 4 and tilerow == 4:
-                #     glBindTexture(GL_TEXTURE_2D, texName)
-                #     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 8, 8, 0, GL_RGBA, GL_UNSIGNED_BYTE, bgtile)
-                # if tilecolumn == 4 and tilerow == 4:
-                #     print "bound texture:"
-                #     print ''.join("\\x{:02x}".format(ord(c)) for c in
-                #                   glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE))
-                
-                #self.pgscreen.bgSprites[tilecolumn][tilerow]._set_texture(pglimage)
-                #assert (self.pgscreen.bgSprites[tilecolumn][tilerow]._texture.id == pglimage.id)
-                #self.pgscreen.bgTiles[tilecolumn][tilerow] = pglimage
 
-                # TODO properly set the tile somewhere
+                self.pgscreen.tileIndices[tilecolumn][tilerow] = ptabTile
+                # TODO set the palette index
 
         self.cycle = (self.cycle + 1) % CYCLES
         if self.cycle == 0:
