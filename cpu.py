@@ -55,6 +55,9 @@ class CPU(object):
         self.irqPending = False
         self.nmiPending = False
 
+        self.ppuCyclesUntilAction = 0
+        self.ppuStoredCycles = 0
+
         self.ppu = ppu.PPU(self)
 
         # Cycles for the PPU to catch up on. (When the CPU executes a
@@ -132,9 +135,9 @@ class CPU(object):
         # self.printState()
 
     def tick(self):
-        while self.excessCycles > 0:
-            self.ppu.ppuTick()
-            self.ppu.ppuTick()
-            self.ppu.ppuTick()
-            self.excessCycles -= 1
+        self.ppuStoredCycles += self.excessCycles * 3
+        self.excessCycles = 0
+        if self.ppuStoredCycles >= self.ppuCyclesUntilAction:
+            self.ppuStoredCycles -= self.ppuCyclesUntilAction
+            self.ppu.ppuTick(self.ppuCyclesUntilAction)
         self.cpuTick()
