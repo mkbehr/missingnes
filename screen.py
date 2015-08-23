@@ -75,40 +75,48 @@ class Screen(object):
         in uint v_palette_n;
 
         out vec2 f_uv;
-        //out uint f_palette_n;
+        out vec4[4] f_palette;
+
+        uniform vec4[16] localPalettes;
 
         void main()
         {
           gl_Position = vec4((float(xy.x) / 16.0) - 1, (float(xy.y) / 15.0) - 1, 0.0, 1.0);
           f_uv = vec2((float(v_tuv.y) / 256.0) + float(v_tuv.x) / 256.0, float(v_tuv.z));
-          //f_palette_n = v_palette_n;
+          for (int i = 0; i < 4; i++) {
+            f_palette[i] = localPalettes[i + int(v_palette_n)*4];
+          }
         }"""
         vertexShader = shaders.compileShader(vertexShaderSrc, GL_VERTEX_SHADER)
 
         fragmentShaderSrc = """#version 330
 
         in vec2 f_uv;
-        //in int f_palette_n;
+        in vec4[4] f_palette;
 
         out vec4 outColor;
 
         uniform sampler2D patternTable;
-        uniform uint[16] localPalettes;
-        uniform sampler1D globalPalette;
+
+        uniform float[16] localPalettes;
 
         void main()
         {
           float localPaletteIndex;
           localPaletteIndex = texture(patternTable, f_uv).r;
-          // TODO: we can probably select the local palette in the vertex shader
+          // for now, assume localPaletteIndex will always be valid
+          outColor = f_palette[int(localPaletteIndex)];
+          outColor.a = 1.0;
         /*
           globalPaletteIndex = localPalettes[f_palette_n * 4 + localPaletteIndex];
           outColor = texture(globalPalette, globalPaletteIndex);
         */
         // DEBUG:
+        /*
           float greyShade = localPaletteIndex / 4.0;
           outColor = vec4(greyShade, greyShade, greyShade, 1.0);
           //outColor = vec4(0.0, 0.0, 1.0, 1.0);
+        */
         }"""
         fragmentShader = shaders.compileShader(fragmentShaderSrc, GL_FRAGMENT_SHADER)
         self.shader = shaders.compileProgram(vertexShader, fragmentShader)
@@ -125,6 +133,9 @@ class Screen(object):
         self.bgPtabName = glGenTextures(1)
 
         self.tileIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
+
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
         # TODO bind global palette
 
@@ -158,7 +169,7 @@ class Screen(object):
         self.maintainPaletteTable()
 
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
-        (bg_r, bg_g, bg_b) = (128,128,128) # DEBUG
+        (bg_r, bg_g, bg_b) = (128,128,255) # DEBUG
         glClearColor(bg_r / 255.0, bg_g / 255.0, bg_b / 255.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT)
 
@@ -216,10 +227,13 @@ class Screen(object):
 
         # point uniform arguments
         glUniform1i(glGetUniformLocation(self.shader, "patternTable"), BG_PATTERN_TABLE_TEXID)
-        # glUniform1i(glGetUniformLocation(self.shader, "globalPalette"), TODO)
 
         # and localPalettes.
-        # glUniformTODO(glGetUniformLocation(self.shader, "localPalettes"), TODO)
+        localPaletteList = self.ppu.dumpLocalPalettes(ppu.BG_PALETTE_BASE)
+        print "localPaletteList[:16]:"
+        print localPaletteList
+        localPaletteCArray = (ctypes.c_float * len(localPaletteList)) (*localPaletteList)
+        glUniform4fv(glGetUniformLocation(self.shader, "localPalettes"), 16, localPaletteCArray)
 
         # Finally, we should be able to draw.
         glDrawArrays(GL_TRIANGLES, 0, N_VERTICES)

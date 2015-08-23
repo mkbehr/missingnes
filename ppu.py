@@ -36,6 +36,9 @@ PALETTE_SIZE = 32
 
 MAX_SPRITES = 8 # maximum number of sprites displayed per scanline
 
+BG_PALETTE_BASE = 0x3f00
+SPRITE_PALETTE_BASE = 0x3f10
+
 class PPU(object):
 
     def __init__(self, cpu):
@@ -499,3 +502,17 @@ class PPU(object):
                     pixel = lowbit + 2 * highbit
                     out[x + 8*256*y + 8*tile] = pixel
         return str(out)
+
+    def dumpLocalPalettes(self, base):
+        """Returns a list of floats representing the local palette starting at the base."""
+        out = [0.0 for i in range(16*4)]
+        for i in range(16):
+            if (i % 4) == 0:
+                print out[4*i:4*(i+1)] # DEBUG
+                continue
+            paletteIndex = ord(self.cpu.mem.ppuRead(base + i))
+            print hex(paletteIndex) # DEBUG
+            out[4*i:(4*i)+3] = [float(x)/255.0 for x in palette.palette(paletteIndex)] # rgb
+            out[(4*i)+3] = 1.0 # alpha
+            print out[4*i:4*(i+1)] # DEBUG
+        return out
