@@ -133,6 +133,7 @@ class Screen(object):
         self.bgPtabName = glGenTextures(1)
 
         self.tileIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
+        self.paletteIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
 
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
@@ -193,7 +194,7 @@ class Screen(object):
                 u_right = 1
                 v_bottom = 1
                 v_top = 0
-                palette_index = 0 # TODO: determined by the pattern table
+                palette_index = self.paletteIndices[x][y]
                 screen_tile_index = (x + y*TILE_COLUMNS) * 6*6
                 vertexList[screen_tile_index : (screen_tile_index+(6*6))] = [
                     # do this as two triangles
@@ -221,17 +222,15 @@ class Screen(object):
         tuvOffset = ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_ubyte))
         glVertexAttribPointer(self.tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride, tuvOffset)
         glEnableVertexAttribArray(self.tuvAttrib)
-        # paletteNOffset = ctypes.c_void_p(5 * ctypes.sizeof(ctypes.c_ubyte))
-        # glVertexAttribIPointer(self.paletteNAttrib, 1, GL_FLOAT, stride, paletteNOffset)
-        # glEnableVertexAttribArray(self.paletteNAttrib)
+        paletteNOffset = ctypes.c_void_p(5 * ctypes.sizeof(ctypes.c_ubyte))
+        glVertexAttribIPointer(self.paletteNAttrib, 1, GL_UNSIGNED_BYTE, stride, paletteNOffset)
+        glEnableVertexAttribArray(self.paletteNAttrib)
 
         # point uniform arguments
         glUniform1i(glGetUniformLocation(self.shader, "patternTable"), BG_PATTERN_TABLE_TEXID)
 
         # and localPalettes.
         localPaletteList = self.ppu.dumpLocalPalettes(ppu.BG_PALETTE_BASE)
-        print "localPaletteList[:16]:"
-        print localPaletteList
         localPaletteCArray = (ctypes.c_float * len(localPaletteList)) (*localPaletteList)
         glUniform4fv(glGetUniformLocation(self.shader, "localPalettes"), 16, localPaletteCArray)
 

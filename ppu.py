@@ -439,6 +439,7 @@ class PPU(object):
                     paletteData = paletteData)
 
                 self.pgscreen.tileIndices[tilecolumn][tilerow] = ptabTile
+                self.pgscreen.paletteIndices[tilecolumn][tilerow] = paletteNumber
                 # TODO set the palette index
 
         self.cycle = (self.cycle + 1) % CYCLES
@@ -508,11 +509,8 @@ class PPU(object):
         out = [0.0 for i in range(16*4)]
         for i in range(16):
             if (i % 4) == 0:
-                print out[4*i:4*(i+1)] # DEBUG
                 continue
             paletteIndex = ord(self.cpu.mem.ppuRead(base + i))
-            print hex(paletteIndex) # DEBUG
             out[4*i:(4*i)+3] = [float(x)/255.0 for x in palette.palette(paletteIndex)] # rgb
             out[(4*i)+3] = 1.0 # alpha
-            print out[4*i:4*(i+1)] # DEBUG
         return out
