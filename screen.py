@@ -91,7 +91,7 @@ class Screen(object):
         void main()
         {
           gl_Position = vec4((float(xy.x) / 16.0) - 1, (float(xy.y) / 15.0) - 1, 0.0, 1.0);
-          f_uvt = vec3(v_tuv.y/8.0, v_tuv.z/8.0, v_tuv.x);
+          f_uvt = vec3(float(v_tuv.y), float(v_tuv.z), float(v_tuv.x));
           //f_palette_n = v_palette_n;
         }"""
         vertexShader = shaders.compileShader(vertexShaderSrc, GL_VERTEX_SHADER)
@@ -103,14 +103,14 @@ class Screen(object):
 
         out vec4 outColor;
 
-        uniform usampler2DArray patternTable;
+        uniform sampler2D patternTable;
         uniform uint[16] localPalettes;
         uniform sampler1D globalPalette;
 
         void main()
         {
-          uint localPaletteIndex;
-          localPaletteIndex = texture(patternTable, f_uvt).r;
+          float localPaletteIndex;
+          localPaletteIndex = texture(patternTable, f_uvt.xy).r;
           // TODO: we can probably select the local palette in the vertex shader
         /*
           globalPaletteIndex = localPalettes[f_palette_n * 4 + localPaletteIndex];
@@ -119,7 +119,7 @@ class Screen(object):
         // DEBUG:
           float greyShade = localPaletteIndex / 4.0;
           outColor = vec4(greyShade, greyShade, greyShade, 1.0);
-          outColor = vec4(0.0, 0.0, 1.0, 1.0);
+          //outColor = vec4(0.0, 0.0, 1.0, 1.0);
         }"""
         fragmentShader = shaders.compileShader(fragmentShaderSrc, GL_FRAGMENT_SHADER)
         self.shader = shaders.compileProgram(vertexShader, fragmentShader)
@@ -286,8 +286,12 @@ class Screen(object):
         if self.lastBgPalette != self.ppu.bgPatternTableAddr:
 
             self.patternTable = self.ppu.dumpPtab(self.ppu.bgPatternTableAddr)
-            glBindTexture(GL_TEXTURE_2D_ARRAY, self.bgPtabName)
+            # I can't make GL_R8UI work, so everything has to be floats
+            patternTableFloats = [float(ord(x)) for x in self.patternTable]
+            print patternTableFloats[:64]
+            textureData = (ctypes.c_float * len(patternTableFloats)) (*patternTableFloats)
+            glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
             glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
-            glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RED, 8, 8, PATTERN_TABLE_TILES,
-                         0, GL_RED, GL_UNSIGNED_BYTE, self.patternTable)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8, 8,
+                         0, GL_RED, GL_FLOAT, textureData)
             self.lastBgPalette = self.ppu.bgPatternTableAddr
