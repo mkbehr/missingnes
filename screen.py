@@ -42,7 +42,7 @@ TILE_COLUMNS = ppu.VISIBLE_COLUMNS/8
 SCREEN_WIDTH = ppu.VISIBLE_COLUMNS
 SCREEN_HEIGHT = ppu.VISIBLE_SCANLINES
 
-N_VERTICES = TILE_ROWS * TILE_COLUMNS * 4
+N_VERTICES = TILE_ROWS * TILE_COLUMNS * 6
 
 PATTERN_TABLE_TILES = 256
 
@@ -229,7 +229,7 @@ class Screen(object):
                 v_bottom = 0
                 v_top = 1
                 palette_index = 0 # TODO: determined by the pattern table
-                screen_tile_index = (x + y*TILE_ROWS) * 6*6
+                screen_tile_index = (x + y*TILE_COLUMNS) * 6*6
                 vertexList[screen_tile_index : (screen_tile_index+(6*6))] = [
                     # do this as two triangles
                     # first triangle
