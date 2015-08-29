@@ -70,6 +70,14 @@ class Screen(object):
 
         assert (glfw.get_window_attrib(window, glfw.CONTEXT_VERSION_MAJOR) >= 3)
 
+
+        # Instead of just tracking keys, consider making sure
+        # that when the user presses a button, that button is pressed
+        # in the next frame, even if it's released before the frame is
+        # processed.
+        glfw.set_input_mode(window, glfw.STICKY_KEYS, 1)
+
+
         vao_id = GLuint(0)
         # use pyglet because pyopengl doesn't like these functions
         pyglet.gl.glGenVertexArrays(1, ctypes.byref(vao_id))
@@ -185,26 +193,24 @@ class Screen(object):
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         self.on_draw()
 
-        # # Handle controller input.
+        # Handle controller input.
 
-        # # TODO: use fewer magic numbers and put together a proper
-        # # structure for this code.
+        glfw.poll_events()
 
-        # # forgive me demeter for I have sinned
-        # ips = self.ppu.cpu.controller.inputState.states
+        # TODO: use fewer magic numbers and put together a proper
+        # structure for this code.
 
-        # # TODO: instead of just tracking keys, consider making sure
-        # # that when the user presses a button, that button is pressed
-        # # in the next frame, even if it's released before the frame is
-        # # processed.
-        # ips[0] = self.keys[key.A] # A
-        # ips[1] = self.keys[key.S] # B
-        # ips[2] = self.keys[key.BACKSLASH] # select: mapping to \ for now
-        # ips[3] = (self.keys[key.ENTER] or self.keys[key.RETURN]) # start
-        # ips[4] = self.keys[key.UP]
-        # ips[5] = self.keys[key.DOWN]
-        # ips[6] = self.keys[key.LEFT]
-        # ips[7] = self.keys[key.RIGHT]
+        # forgive me demeter for I have sinned
+        ips = self.ppu.cpu.controller.inputState.states
+
+        ips[0] = self.pollKey(glfw.KEY_A) # A
+        ips[1] = self.pollKey(glfw.KEY_S) # B
+        ips[2] = self.pollKey(glfw.KEY_BACKSLASH) # select: mapping to \ for now
+        ips[3] = self.pollKey(glfw.KEY_ENTER) # start
+        ips[4] = self.pollKey(glfw.KEY_UP) # up
+        ips[5] = self.pollKey(glfw.KEY_DOWN) # down
+        ips[6] = self.pollKey(glfw.KEY_LEFT) # left
+        ips[7] = self.pollKey(glfw.KEY_RIGHT) # right
 
     def on_draw(self):
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
@@ -407,3 +413,6 @@ class Screen(object):
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*256, 8,
                          0, GL_RED, GL_FLOAT, textureData)
             self.lastSpritePalette = self.ppu.spritePatternTableAddr
+
+    def pollKey(self, key):
+        return glfw.get_key(self.window, key) == glfw.PRESS
