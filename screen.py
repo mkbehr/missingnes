@@ -44,6 +44,9 @@ SPRITE_PATTERN_TABLE_TEXID = 1
 # number of values (elements) per vertex in the vertex buffer
 VERTEX_ELTS = 7
 
+DRAW_BG = True
+DRAW_SPRITES = True
+
 class Screen(object):
 
     def __init__(self, _ppu): # underscore to patch over sloppy naming hiding the ppu module
@@ -215,20 +218,6 @@ class Screen(object):
         # ips[7] = self.keys[key.RIGHT]
 
     def on_draw(self):
-        glBindBuffer(GL_ARRAY_BUFFER, self.bgVbo)
-
-        # We need to do this here (anytime before the draw call) and I
-        # don't really understand why. The order is important for some
-        # reason.
-        glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
-        glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
-
-
-        self.maintainBgPaletteTable()
-
-        # we also need this (after maintainBgPaletteTable) and now I'm just clueless
-        #glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
-
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
         (bg_r, bg_g, bg_b) = (128,128,255) # DEBUG
         glClearColor(bg_r / 255.0, bg_g / 255.0, bg_b / 255.0, 1.0)
@@ -237,95 +226,169 @@ class Screen(object):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-        # TODO get rid of some of these magic numbers
+        if DRAW_BG:
+            glBindBuffer(GL_ARRAY_BUFFER, self.bgVbo)
 
-        # Set tile and palette. The rest of the values in the VBO won't change.
-        for x in xrange(TILE_COLUMNS):
-            for y in xrange(TILE_ROWS):
-                tile = self.tileIndices[x][y]
-                palette_index = self.paletteIndices[x][y]
-                screen_tile_index = (x + y*TILE_COLUMNS) * VERTEX_ELTS*6
-                for vertex_i in range(6):
-                    self.bgVertices[screen_tile_index + vertex_i*VERTEX_ELTS + 3] = tile
-                    self.bgVertices[screen_tile_index + vertex_i*VERTEX_ELTS + 6] = palette_index
+            # We need to do this here (anytime before the draw call) and I
+            # don't really understand why. The order is important for some
+            # reason.
+            glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
+            glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
 
-        stride = VERTEX_ELTS * ctypes.sizeof(ctypes.c_ubyte)
+            self.maintainBgPaletteTable()
 
-        glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(self.bgVertices), self.bgVertices, GL_DYNAMIC_DRAW)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-        # TODO point attributes into that big buffer
-        xyOffset = ctypes.c_void_p(0)
-        glVertexAttribPointer(self.xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride, xyOffset)
-        glEnableVertexAttribArray(self.xyAttrib)
-        xHighOffset = ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_ubyte))
-        glVertexAttribPointer(self.xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride, xHighOffset)
-        glEnableVertexAttribArray(self.xHighAttrib)
-        tuvOffset = ctypes.c_void_p(3 * ctypes.sizeof(ctypes.c_ubyte))
-        glVertexAttribPointer(self.tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride, tuvOffset)
-        glEnableVertexAttribArray(self.tuvAttrib)
-        paletteNOffset = ctypes.c_void_p(6 * ctypes.sizeof(ctypes.c_ubyte))
-        glVertexAttribIPointer(self.paletteNAttrib, 1, GL_UNSIGNED_BYTE, stride, paletteNOffset)
-        glEnableVertexAttribArray(self.paletteNAttrib)
+            # TODO get rid of some of these magic numbers
 
-        # point uniform arguments
-        glUniform1i(glGetUniformLocation(self.shader, "patternTable"), BG_PATTERN_TABLE_TEXID)
+            # Set tile and palette. The rest of the values in the VBO won't change.
+            for x in xrange(TILE_COLUMNS):
+                for y in xrange(TILE_ROWS):
+                    tile = self.tileIndices[x][y]
+                    palette_index = self.paletteIndices[x][y]
+                    screen_tile_index = (x + y*TILE_COLUMNS) * VERTEX_ELTS*6
+                    for vertex_i in range(6):
+                        self.bgVertices[screen_tile_index + vertex_i*VERTEX_ELTS + 3] = tile
+                        self.bgVertices[screen_tile_index + vertex_i*VERTEX_ELTS + 6] = palette_index
 
-        # and localPalettes.
-        localPaletteList = self.ppu.dumpLocalPalettes(ppu.BG_PALETTE_BASE)
-        localPaletteCArray = (ctypes.c_float * len(localPaletteList)) (*localPaletteList)
-        glUniform4fv(glGetUniformLocation(self.shader, "localPalettes"), 16, localPaletteCArray)
+            stride = VERTEX_ELTS * ctypes.sizeof(ctypes.c_ubyte)
 
-        #glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
-        #glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
-        #glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
+            glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(self.bgVertices), self.bgVertices, GL_DYNAMIC_DRAW)
 
+            # point attributes into that big buffer
+            xyOffset = ctypes.c_void_p(0)
+            glVertexAttribPointer(self.xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride, xyOffset)
+            glEnableVertexAttribArray(self.xyAttrib)
+            xHighOffset = ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_ubyte))
+            glVertexAttribPointer(self.xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride, xHighOffset)
+            glEnableVertexAttribArray(self.xHighAttrib)
+            tuvOffset = ctypes.c_void_p(3 * ctypes.sizeof(ctypes.c_ubyte))
+            glVertexAttribPointer(self.tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride, tuvOffset)
+            glEnableVertexAttribArray(self.tuvAttrib)
+            paletteNOffset = ctypes.c_void_p(6 * ctypes.sizeof(ctypes.c_ubyte))
+            glVertexAttribIPointer(self.paletteNAttrib, 1, GL_UNSIGNED_BYTE, stride, paletteNOffset)
+            glEnableVertexAttribArray(self.paletteNAttrib)
 
-        # Finally, we should be able to draw.
-        glDrawArrays(GL_TRIANGLES, 0, N_BG_VERTICES)
+            # point uniform arguments
+            glUniform1i(glGetUniformLocation(self.shader, "patternTable"), BG_PATTERN_TABLE_TEXID)
+
+            # and localPalettes.
+            localPaletteList = self.ppu.dumpLocalPalettes(ppu.BG_PALETTE_BASE)
+            localPaletteCArray = (ctypes.c_float * len(localPaletteList)) (*localPaletteList)
+            glUniform4fv(glGetUniformLocation(self.shader, "localPalettes"), 16, localPaletteCArray)
+
+            # Finally, we should be able to draw.
+            glDrawArrays(GL_TRIANGLES, 0, N_BG_VERTICES)
 
         ## Now do sprites.
+        if DRAW_SPRITES:
+            glBindBuffer(GL_ARRAY_BUFFER, self.spriteVbo)
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.spriteVbo)
+            # as with the calls to these in the bg code, I don't know why
+            # we need these but we do
+            glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE)
+            glBindTexture(GL_TEXTURE_2D, self.spritePtabName)
 
-        # as with the calls to these in the bg code, I don't know why
-        # we need these but we do
-        glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE)
-        glBindTexture(GL_TEXTURE_2D, self.spritePtabName)
+            self.maintainSpritePaletteTable()
 
-        self.maintainSpritePaletteTable()
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-        nSpriteVertices = 0
-        spriteVertexList = []
+            nSpriteVertices = 0
+            spriteVertexList = []
 
-        oam = self.ppu.oam
-        for i in range(ppu.OAM_SIZE / ppu.OAM_ENTRY_SIZE):
-            # TODO deal with maximum sprites per scanline
-            baseindex = i * ppu.OAM_ENTRY_SIZE
-            spritetop = ord(oam[baseindex]) + 1
-            if spritetop >= 0xf0: # the sprite is wholly off the screen; ignore it
-                continue
-            # TODO account for 8x16 sprites
+            oam = self.ppu.oam
+            for i in range(ppu.OAM_SIZE / ppu.OAM_ENTRY_SIZE):
+                # TODO deal with maximum sprites per scanline
+                baseindex = i * ppu.OAM_ENTRY_SIZE
+                spritetop = ord(oam[baseindex]) + 1
+                if spritetop >= 0xf0: # the sprite is wholly off the screen; ignore it
+                    continue
+                # TODO account for 8x16 sprites
 
-            tileIndex = ord(oam[baseindex+1])
-            attributes = ord(oam[baseindex+2])
-            spriteleft = ord(oam[baseindex+3])
-            spritePalette = attributes & 0x3
-            horizontalMirror = bool(attributes & 0x40)
-            verticalMirror = bool(attributes & 0x80)
+                tile = ord(oam[baseindex+1])
+                attributes = ord(oam[baseindex+2])
+                spriteleft = ord(oam[baseindex+3])
+                palette_index = attributes & 0x3
+                horizontalMirror = bool(attributes & 0x40)
+                verticalMirror = bool(attributes & 0x80)
 
-            spritebottom = spritetop+8
-            spriteright = spriteleft+8
+                spritebottom = spritetop+8
+                spriteright = spriteleft+8
 
-            # TODO this palette code should possibly belong in ppu.py
+                x_left = spriteleft
+                x_right = spriteright % 256
+                x_left_high = 0
+                x_right_high = spriteright / 256
 
-            # TODO no magic numbers
-            paletteAddr = 0x3F11 + (spritePalette * 4)
-            paletteData = [ord(self.ppu.cpu.mem.ppuRead(paletteAddr)),
-                           ord(self.ppu.cpu.mem.ppuRead(paletteAddr+1)),
-                           ord(self.ppu.cpu.mem.ppuRead(paletteAddr+2))]
+                y_top = SCREEN_HEIGHT - spritetop
+                y_bottom = SCREEN_HEIGHT - spritebottom
 
-            # TODO populate the vertex list and increase the vertex count
+                if horizontalMirror:
+                    u_left = 1
+                    u_right = 0
+                else:
+                    u_left = 0
+                    u_right = 1
 
+                if verticalMirror:
+                    v_bottom = 0
+                    v_top = 1
+                else:
+                    v_bottom = 1
+                    v_top = 0
+
+                spriteVertexList += [
+                    # first triangle
+                    x_left, y_bottom, x_left_high, tile, u_left, v_bottom, palette_index,
+                    x_right, y_bottom, x_right_high, tile, u_right, v_bottom, palette_index,
+                    x_right, y_top, x_right_high, tile, u_right, v_top, palette_index,
+                    # second triangle
+                    x_left, y_bottom, x_left_high, tile, u_left, v_bottom, palette_index,
+                    x_right, y_top, x_right_high, tile, u_right, v_top, palette_index,
+                    x_left, y_top, x_left_high, tile, u_left, v_top, palette_index,
+                    ]
+                nSpriteVertices += 6
+
+            # TODO: we can go a bit faster by not recreating this and just
+            # trusting our vertex count to prevent us from drawing garbage
+            # data
+            spriteVertices = (ctypes.c_ubyte * len(spriteVertexList)) (*spriteVertexList)
+
+            stride = VERTEX_ELTS * ctypes.sizeof(ctypes.c_ubyte)
+
+            glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(self.bgVertices), spriteVertices, GL_DYNAMIC_DRAW)
+
+            # Pointing attributes should work the same as with the bg
+            # code. I'm not sure we even need to repeat this code. Only
+            # difference is that the pattern table and palettes are
+            # different.
+
+            # point attributes into that big buffer
+            xyOffset = ctypes.c_void_p(0)
+            glVertexAttribPointer(self.xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride, xyOffset)
+            glEnableVertexAttribArray(self.xyAttrib)
+            xHighOffset = ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_ubyte))
+            glVertexAttribPointer(self.xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride, xHighOffset)
+            glEnableVertexAttribArray(self.xHighAttrib)
+            tuvOffset = ctypes.c_void_p(3 * ctypes.sizeof(ctypes.c_ubyte))
+            glVertexAttribPointer(self.tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride, tuvOffset)
+            glEnableVertexAttribArray(self.tuvAttrib)
+            paletteNOffset = ctypes.c_void_p(6 * ctypes.sizeof(ctypes.c_ubyte))
+            glVertexAttribIPointer(self.paletteNAttrib, 1, GL_UNSIGNED_BYTE, stride, paletteNOffset)
+            glEnableVertexAttribArray(self.paletteNAttrib)
+
+            # point uniform arguments
+            glUniform1i(glGetUniformLocation(self.shader, "patternTable"), SPRITE_PATTERN_TABLE_TEXID)
+
+            # and localPalettes.
+            localPaletteList = self.ppu.dumpLocalPalettes(ppu.SPRITE_PALETTE_BASE)
+            localPaletteCArray = (ctypes.c_float * len(localPaletteList)) (*localPaletteList)
+            glUniform4fv(glGetUniformLocation(self.shader, "localPalettes"), 16, localPaletteCArray)
+
+            # And now we can draw and hope for the best.
+            glDrawArrays(GL_TRIANGLES, 0, nSpriteVertices)
 
         glfw.swap_buffers(self.window)
 
