@@ -39,6 +39,8 @@ BG_PATTERN_TABLE_TEXTURE = GL_TEXTURE0
 BG_PATTERN_TABLE_TEXID = 0
 # TODO other texture ids go here
 
+# number of values (elements) per vertex in the vertex buffer
+VERTEX_ELTS = 7
 
 class Screen(object):
 
@@ -68,9 +70,12 @@ class Screen(object):
         pyglet.gl.glGenVertexArrays(1, ctypes.byref(vao_id))
         pyglet.gl.glBindVertexArray(vao_id.value)
 
+        # The x_high here is because x can reach 256, so we need an
+        # extra byte to stop it from wrapping around to 0.
         vertexShaderSrc = """#version 330
 
         in vec2 xy;
+        in float x_high;
         in vec3 v_tuv;
         in uint v_palette_n;
 
@@ -81,7 +86,8 @@ class Screen(object):
 
         void main()
         {
-          gl_Position = vec4((float(xy.x) / 16.0) - 1, (float(xy.y) / 15.0) - 1, 0.0, 1.0);
+          gl_Position = vec4(((float(xy.x) + (x_high * 256)) / (16.0*8.0)) - 1,
+                             (float(xy.y) / (15.0*8.0)) - 1, 0.0, 1.0);
           f_uv = vec2((float(v_tuv.y) / 256.0) + float(v_tuv.x) / 256.0, float(v_tuv.z));
           for (int i = 0; i < 4; i++) {
             f_palette[i] = localPalettes[i + int(v_palette_n)*4];
@@ -123,6 +129,7 @@ class Screen(object):
         glUseProgram(self.shader)
 
         self.xyAttrib = glGetAttribLocation(self.shader, "xy")
+        self.xHighAttrib = glGetAttribLocation(self.shader, "x_high");
         self.tuvAttrib = glGetAttribLocation(self.shader, "v_tuv")
         self.paletteNAttrib = glGetAttribLocation(self.shader, "v_palette_n")
 
@@ -135,39 +142,43 @@ class Screen(object):
         self.tileIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
         self.paletteIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
 
-        vertexList = [0 for x in range(TILE_COLUMNS * TILE_ROWS * 6 * 6)]
+        vertexList = [0 for x in range(TILE_COLUMNS * TILE_ROWS * VERTEX_ELTS * 6)]
         self.vertices = (ctypes.c_ubyte * len(vertexList)) (*vertexList)
         # Set x, y, u, and v coordinates, because they won't change.
 
-        # Note: x and y coordinates are in increments of tiles, so
-        # they range from 0 to 32. This is a dumb hack because the
-        # vertex shader was doing dumb things when I told it to divide
-        # by 256, for reasons I don't understand.
+        # Note: x and y coordinates are pixel coordinates, but we need
+        # to store an extra byte for the x coordinate because it can
+        # range from 0 to 256 inclusive.
         for x in xrange(TILE_COLUMNS):
             for y in xrange(TILE_ROWS):
-                x_left = x
-                x_right = (x+1)
-                y_bottom = (TILE_ROWS - y - 1)
-                y_top = (TILE_ROWS - y)
+                x_left = x*8
+                x_right = (x+1)*8
+                x_left_high = 0
+                if x_right == 256:
+                    x_right = 0
+                    x_right_high = 1
+                else:
+                    x_right_high = 0
+                y_bottom = (TILE_ROWS - y - 1)*8
+                y_top = (TILE_ROWS - y)*8
                 tile = 0 # this will change
                 u_left = 0
                 u_right = 1
                 v_bottom = 1
                 v_top = 0
                 palette_index = 0 # this will change
-                screen_tile_index = (x + y*TILE_COLUMNS) * 6*6
-                self.vertices[screen_tile_index : (screen_tile_index+(6*6))] = [
+                screen_tile_index = (x + y*TILE_COLUMNS) * VERTEX_ELTS * 6
+                self.vertices[screen_tile_index : (screen_tile_index+(VERTEX_ELTS*6))] = [
                     # do this as two triangles
                     # first triangle
-                    x_left, y_bottom, tile, u_left, v_bottom, palette_index,
-                    x_right, y_bottom, tile, u_right, v_bottom, palette_index,
-                    x_right, y_top, tile, u_right, v_top, palette_index,
+                    x_left, y_bottom, x_left_high, tile, u_left, v_bottom, palette_index,
+                    x_right, y_bottom, x_right_high, tile, u_right, v_bottom, palette_index,
+                    x_right, y_top, x_right_high, tile, u_right, v_top, palette_index,
                     # second triangle
-                    x_left, y_bottom, tile, u_left, v_bottom, palette_index,
-                    x_right, y_top, tile, u_right, v_top, palette_index,
-                    x_left, y_top, tile, u_left, v_top, palette_index,
+                    x_left, y_bottom, x_left_high, tile, u_left, v_bottom, palette_index,
+                    x_right, y_top, x_right_high, tile, u_right, v_top, palette_index,
+                    x_left, y_top, x_left_high, tile, u_left, v_top, palette_index,
                     ]
-
 
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
@@ -218,13 +229,12 @@ class Screen(object):
             for y in xrange(TILE_ROWS):
                 tile = self.tileIndices[x][y]
                 palette_index = self.paletteIndices[x][y]
-                screen_tile_index = (x + y*TILE_COLUMNS) * 6*6
+                screen_tile_index = (x + y*TILE_COLUMNS) * VERTEX_ELTS*6
                 for vertex_i in range(6):
-                    self.vertices[screen_tile_index + vertex_i*6 + 2] = tile
-                    self.vertices[screen_tile_index + vertex_i*6 + 5] = palette_index
+                    self.vertices[screen_tile_index + vertex_i*VERTEX_ELTS + 3] = tile
+                    self.vertices[screen_tile_index + vertex_i*VERTEX_ELTS + 6] = palette_index
 
-        # FIXME magic number
-        stride = 6 * ctypes.sizeof(ctypes.c_ubyte)
+        stride = VERTEX_ELTS * ctypes.sizeof(ctypes.c_ubyte)
 
         glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(self.vertices), self.vertices, GL_DYNAMIC_DRAW)
 
@@ -232,10 +242,13 @@ class Screen(object):
         xyOffset = ctypes.c_void_p(0)
         glVertexAttribPointer(self.xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride, xyOffset)
         glEnableVertexAttribArray(self.xyAttrib)
-        tuvOffset = ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_ubyte))
+        xHighOffset = ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_ubyte))
+        glVertexAttribPointer(self.xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride, xHighOffset)
+        glEnableVertexAttribArray(self.xHighAttrib)
+        tuvOffset = ctypes.c_void_p(3 * ctypes.sizeof(ctypes.c_ubyte))
         glVertexAttribPointer(self.tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride, tuvOffset)
         glEnableVertexAttribArray(self.tuvAttrib)
-        paletteNOffset = ctypes.c_void_p(5 * ctypes.sizeof(ctypes.c_ubyte))
+        paletteNOffset = ctypes.c_void_p(6 * ctypes.sizeof(ctypes.c_ubyte))
         glVertexAttribIPointer(self.paletteNAttrib, 1, GL_UNSIGNED_BYTE, stride, paletteNOffset)
         glEnableVertexAttribArray(self.paletteNAttrib)
 
