@@ -117,17 +117,6 @@ class Screen(object):
           localPaletteIndex = texture(patternTable, f_uv).r;
           // for now, assume localPaletteIndex will always be valid
           outColor = f_palette[int(localPaletteIndex)];
-          outColor.a = 1.0;
-        /*
-          globalPaletteIndex = localPalettes[f_palette_n * 4 + localPaletteIndex];
-          outColor = texture(globalPalette, globalPaletteIndex);
-        */
-        // DEBUG:
-        /*
-          float greyShade = localPaletteIndex / 4.0;
-          outColor = vec4(greyShade, greyShade, greyShade, 1.0);
-          //outColor = vec4(0.0, 0.0, 1.0, 1.0);
-        */
         }"""
         fragmentShader = shaders.compileShader(fragmentShaderSrc, GL_FRAGMENT_SHADER)
         self.shader = shaders.compileProgram(vertexShader, fragmentShader)
@@ -219,7 +208,6 @@ class Screen(object):
 
     def on_draw(self):
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
-        (bg_r, bg_g, bg_b) = (128,128,255) # DEBUG
         glClearColor(bg_r / 255.0, bg_g / 255.0, bg_b / 255.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT)
 
