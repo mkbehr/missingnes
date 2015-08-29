@@ -135,6 +135,40 @@ class Screen(object):
         self.tileIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
         self.paletteIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
 
+        vertexList = [0 for x in range(TILE_COLUMNS * TILE_ROWS * 6 * 6)]
+        self.vertices = (ctypes.c_ubyte * len(vertexList)) (*vertexList)
+        # Set x, y, u, and v coordinates, because they won't change.
+
+        # Note: x and y coordinates are in increments of tiles, so
+        # they range from 0 to 32. This is a dumb hack because the
+        # vertex shader was doing dumb things when I told it to divide
+        # by 256, for reasons I don't understand.
+        for x in xrange(TILE_COLUMNS):
+            for y in xrange(TILE_ROWS):
+                x_left = x
+                x_right = (x+1)
+                y_bottom = (TILE_ROWS - y - 1)
+                y_top = (TILE_ROWS - y)
+                tile = 0 # this will change
+                u_left = 0
+                u_right = 1
+                v_bottom = 1
+                v_top = 0
+                palette_index = 0 # this will change
+                screen_tile_index = (x + y*TILE_COLUMNS) * 6*6
+                self.vertices[screen_tile_index : (screen_tile_index+(6*6))] = [
+                    # do this as two triangles
+                    # first triangle
+                    x_left, y_bottom, tile, u_left, v_bottom, palette_index,
+                    x_right, y_bottom, tile, u_right, v_bottom, palette_index,
+                    x_right, y_top, tile, u_right, v_top, palette_index,
+                    # second triangle
+                    x_left, y_bottom, tile, u_left, v_bottom, palette_index,
+                    x_right, y_top, tile, u_right, v_top, palette_index,
+                    x_left, y_top, tile, u_left, v_top, palette_index,
+                    ]
+
+
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
@@ -178,42 +212,21 @@ class Screen(object):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
         # TODO get rid of some of these magic numbers
-        vertexList = [0 for x in range(TILE_COLUMNS * TILE_ROWS * 6 * 6)]
-        # Note: x and y coordinates are in increments of tiles, so
-        # they range from 0 to 32. This is a dumb hack because the
-        # vertex shader was doing dumb things when I told it to divide
-        # by 256, for reasons I don't understand.
+
+        # Set tile and palette. The rest of the values in the VBO won't change.
         for x in xrange(TILE_COLUMNS):
             for y in xrange(TILE_ROWS):
-                x_left = x
-                x_right = x+1
-                y_bottom = (TILE_ROWS - y - 1)
-                y_top = (TILE_ROWS - y)
                 tile = self.tileIndices[x][y]
-                u_left = 0
-                u_right = 1
-                v_bottom = 1
-                v_top = 0
                 palette_index = self.paletteIndices[x][y]
                 screen_tile_index = (x + y*TILE_COLUMNS) * 6*6
-                vertexList[screen_tile_index : (screen_tile_index+(6*6))] = [
-                    # do this as two triangles
-                    # first triangle
-                    x_left, y_bottom, tile, u_left, v_bottom, palette_index,
-                    x_right, y_bottom, tile, u_right, v_bottom, palette_index,
-                    x_right, y_top, tile, u_right, v_top, palette_index,
-                    # second triangle
-                    x_left, y_bottom, tile, u_left, v_bottom, palette_index,
-                    x_right, y_top, tile, u_right, v_top, palette_index,
-                    x_left, y_top, tile, u_left, v_top, palette_index,
-                    ]
-
-        vertices = (ctypes.c_ubyte * (TILE_COLUMNS * TILE_ROWS * 6 * 6)) (*vertexList)
+                for vertex_i in range(6):
+                    self.vertices[screen_tile_index + vertex_i*6 + 2] = tile
+                    self.vertices[screen_tile_index + vertex_i*6 + 5] = palette_index
 
         # FIXME magic number
         stride = 6 * ctypes.sizeof(ctypes.c_ubyte)
 
-        glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(vertices), vertices, GL_DYNAMIC_DRAW)
+        glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(self.vertices), self.vertices, GL_DYNAMIC_DRAW)
 
         # TODO point attributes into that big buffer
         xyOffset = ctypes.c_void_p(0)
