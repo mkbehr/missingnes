@@ -31,12 +31,14 @@ TILE_COLUMNS = ppu.VISIBLE_COLUMNS/8
 SCREEN_WIDTH = ppu.VISIBLE_COLUMNS
 SCREEN_HEIGHT = ppu.VISIBLE_SCANLINES
 
-N_VERTICES = TILE_ROWS * TILE_COLUMNS * 6
+N_BG_VERTICES = TILE_ROWS * TILE_COLUMNS * 6
 
 PATTERN_TABLE_TILES = 256
 
 BG_PATTERN_TABLE_TEXTURE = GL_TEXTURE0
 BG_PATTERN_TABLE_TEXID = 0
+SPRITE_PATTERN_TABLE_TEXTURE = GL_TEXTURE1
+SPRITE_PATTERN_TABLE_TEXID = 1
 # TODO other texture ids go here
 
 # number of values (elements) per vertex in the vertex buffer
@@ -134,16 +136,19 @@ class Screen(object):
         self.paletteNAttrib = glGetAttribLocation(self.shader, "v_palette_n")
 
         self.lastBgPalette = None
+        self.lastSpritePalette = None
 
         self.bgVbo = glGenBuffers(1)
+        self.spriteVbo = glGenBuffers(1)
 
         self.bgPtabName = glGenTextures(1)
+        self.spritePtabName = glGenTextures(1)
 
         self.tileIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
         self.paletteIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
 
-        vertexList = [0 for x in range(TILE_COLUMNS * TILE_ROWS * VERTEX_ELTS * 6)]
-        self.vertices = (ctypes.c_ubyte * len(vertexList)) (*vertexList)
+        bgVertexList = [0 for x in range(TILE_COLUMNS * TILE_ROWS * VERTEX_ELTS * 6)]
+        self.bgVertices = (ctypes.c_ubyte * len(bgVertexList)) (*bgVertexList)
         # Set x, y, u, and v coordinates, because they won't change.
 
         # Note: x and y coordinates are pixel coordinates, but we need
@@ -168,7 +173,7 @@ class Screen(object):
                 v_top = 0
                 palette_index = 0 # this will change
                 screen_tile_index = (x + y*TILE_COLUMNS) * VERTEX_ELTS * 6
-                self.vertices[screen_tile_index : (screen_tile_index+(VERTEX_ELTS*6))] = [
+                self.bgVertices[screen_tile_index : (screen_tile_index+(VERTEX_ELTS*6))] = [
                     # do this as two triangles
                     # first triangle
                     x_left, y_bottom, x_left_high, tile, u_left, v_bottom, palette_index,
@@ -212,7 +217,17 @@ class Screen(object):
     def on_draw(self):
         glBindBuffer(GL_ARRAY_BUFFER, self.bgVbo)
 
-        self.maintainPaletteTable()
+        # We need to do this here (anytime before the draw call) and I
+        # don't really understand why. The order is important for some
+        # reason.
+        glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
+        glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
+
+
+        self.maintainBgPaletteTable()
+
+        # we also need this (after maintainBgPaletteTable) and now I'm just clueless
+        #glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
 
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
         (bg_r, bg_g, bg_b) = (128,128,255) # DEBUG
@@ -231,12 +246,12 @@ class Screen(object):
                 palette_index = self.paletteIndices[x][y]
                 screen_tile_index = (x + y*TILE_COLUMNS) * VERTEX_ELTS*6
                 for vertex_i in range(6):
-                    self.vertices[screen_tile_index + vertex_i*VERTEX_ELTS + 3] = tile
-                    self.vertices[screen_tile_index + vertex_i*VERTEX_ELTS + 6] = palette_index
+                    self.bgVertices[screen_tile_index + vertex_i*VERTEX_ELTS + 3] = tile
+                    self.bgVertices[screen_tile_index + vertex_i*VERTEX_ELTS + 6] = palette_index
 
         stride = VERTEX_ELTS * ctypes.sizeof(ctypes.c_ubyte)
 
-        glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(self.vertices), self.vertices, GL_DYNAMIC_DRAW)
+        glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(self.bgVertices), self.bgVertices, GL_DYNAMIC_DRAW)
 
         # TODO point attributes into that big buffer
         xyOffset = ctypes.c_void_p(0)
@@ -260,12 +275,61 @@ class Screen(object):
         localPaletteCArray = (ctypes.c_float * len(localPaletteList)) (*localPaletteList)
         glUniform4fv(glGetUniformLocation(self.shader, "localPalettes"), 16, localPaletteCArray)
 
+        #glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
+        #glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
+        #glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
+
+
         # Finally, we should be able to draw.
-        glDrawArrays(GL_TRIANGLES, 0, N_VERTICES)
+        glDrawArrays(GL_TRIANGLES, 0, N_BG_VERTICES)
+
+        ## Now do sprites.
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.spriteVbo)
+
+        # as with the calls to these in the bg code, I don't know why
+        # we need these but we do
+        glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE)
+        glBindTexture(GL_TEXTURE_2D, self.spritePtabName)
+
+        self.maintainSpritePaletteTable()
+
+        nSpriteVertices = 0
+        spriteVertexList = []
+
+        oam = self.ppu.oam
+        for i in range(ppu.OAM_SIZE / ppu.OAM_ENTRY_SIZE):
+            # TODO deal with maximum sprites per scanline
+            baseindex = i * ppu.OAM_ENTRY_SIZE
+            spritetop = ord(oam[baseindex]) + 1
+            if spritetop >= 0xf0: # the sprite is wholly off the screen; ignore it
+                continue
+            # TODO account for 8x16 sprites
+
+            tileIndex = ord(oam[baseindex+1])
+            attributes = ord(oam[baseindex+2])
+            spriteleft = ord(oam[baseindex+3])
+            spritePalette = attributes & 0x3
+            horizontalMirror = bool(attributes & 0x40)
+            verticalMirror = bool(attributes & 0x80)
+
+            spritebottom = spritetop+8
+            spriteright = spriteleft+8
+
+            # TODO this palette code should possibly belong in ppu.py
+
+            # TODO no magic numbers
+            paletteAddr = 0x3F11 + (spritePalette * 4)
+            paletteData = [ord(self.ppu.cpu.mem.ppuRead(paletteAddr)),
+                           ord(self.ppu.cpu.mem.ppuRead(paletteAddr+1)),
+                           ord(self.ppu.cpu.mem.ppuRead(paletteAddr+2))]
+
+            # TODO populate the vertex list and increase the vertex count
+
 
         glfw.swap_buffers(self.window)
 
-    def maintainPaletteTable(self):
+    def maintainBgPaletteTable(self):
         # Note: only call this when self.bgVbo is bound to GL_ARRAY_BUFFER... maybe?
         if self.lastBgPalette != self.ppu.bgPatternTableAddr:
 
@@ -278,3 +342,17 @@ class Screen(object):
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*256, 8,
                          0, GL_RED, GL_FLOAT, textureData)
             self.lastBgPalette = self.ppu.bgPatternTableAddr
+
+    def maintainSpritePaletteTable(self):
+        # I think this wants self.spriteVbo to be bound to GL_ARRAY_BUFFER
+        if self.lastSpritePalette != self.ppu.spritePatternTableAddr:
+
+            self.patternTable = self.ppu.dumpPtab(self.ppu.spritePatternTableAddr)
+            # I can't make GL_R8UI work, so everything has to be floats
+            patternTableFloats = [float(ord(x)) for x in self.patternTable]
+            textureData = (ctypes.c_float * len(patternTableFloats)) (*patternTableFloats)
+            glBindTexture(GL_TEXTURE_2D, self.spritePtabName)
+            glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*256, 8,
+                         0, GL_RED, GL_FLOAT, textureData)
+            self.lastSpritePalette = self.ppu.spritePatternTableAddr
