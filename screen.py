@@ -5,6 +5,7 @@ have more separation?)
 
 """
 import ctypes
+import time
 
 import pyglet
 from pyglet.window import key
@@ -24,6 +25,8 @@ import numpy as np
 
 import palette
 import ppu
+
+PROGRAM_NAME = "Missingnes"
 
 TILE_ROWS = ppu.VISIBLE_SCANLINES/8
 TILE_COLUMNS = ppu.VISIBLE_COLUMNS/8
@@ -47,6 +50,11 @@ VERTEX_ELTS = 7
 DRAW_BG = True
 DRAW_SPRITES = True
 
+FPS_UPDATE_INTERVAL = 1 # in seconds
+
+MAX_FPS = 60
+SECONDS_PER_FRAME = 1.0 / MAX_FPS
+
 class Screen(object):
 
     def __init__(self, _ppu): # underscore to patch over sloppy naming hiding the ppu module
@@ -62,7 +70,9 @@ class Screen(object):
         glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, GL_TRUE);
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE);
 
-        window = glfw.create_window(SCREEN_WIDTH, SCREEN_HEIGHT, "Hello World", None, None)
+        window = glfw.create_window(SCREEN_WIDTH, SCREEN_HEIGHT,
+                                    "%s - ?? FPS" % PROGRAM_NAME,
+                                    None, None)
         self.window = window
 
         if not window:
@@ -185,6 +195,10 @@ class Screen(object):
                     x_left, y_top, x_left_high, tile, u_left, v_top, palette_index,
                     ]
 
+        self.fpsLastUpdated = None
+        self.fpsLastTime = None
+        self.lastFps = None
+
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
@@ -211,6 +225,23 @@ class Screen(object):
         ips[5] = self.pollKey(glfw.KEY_DOWN) # down
         ips[6] = self.pollKey(glfw.KEY_LEFT) # left
         ips[7] = self.pollKey(glfw.KEY_RIGHT) # right
+
+        timenow = time.clock()
+        if self.fpsLastUpdated is None:
+            self.fpsLastUpdated = frame
+            self.fpsLastTime = timenow
+        elif timenow >= self.fpsLastTime + 1:
+            self.lastFps = (frame - self.fpsLastUpdated) * 1.0 / (timenow - self.fpsLastTime)
+            print "calculating FPS"
+            print "frame number is %d; last frame was %d" % (frame, self.fpsLastUpdated)
+            print "time is %f; last time was %f" % (timenow, self.fpsLastTime)
+            print "time per frame %fs; frames per second %f" % (
+                (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated) * 1.0,
+                (frame - self.fpsLastUpdated) * 1.0 / (timenow - self.fpsLastTime))
+            glfw.set_window_title(self.window,
+                                  "%s - %d FPS" % (PROGRAM_NAME, self.lastFps))
+            self.fpsLastUpdated = frame
+            self.fpsLastTime = timenow
 
     def on_draw(self):
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
