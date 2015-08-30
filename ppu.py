@@ -9,7 +9,7 @@ from OpenGL.GL import * # TODO this file does not want GL code
 
 DRAW_GRID = False
 
-PPU_DEBUG = True
+PPU_DEBUG = False
 
 SCANLINES = 262
 VISIBLE_SCANLINES = 240

@@ -53,7 +53,6 @@ DRAW_SPRITES = True
 FPS_UPDATE_INTERVAL = 2.0 # in seconds
 MAX_FPS = 60
 SECONDS_PER_FRAME = 1.0 / MAX_FPS
-FPS_TOLERANCE = 0.1
 
 # gain determining seconds per frame (as in a kalman filter)
 SPF_GAIN = 0.2
@@ -230,12 +229,15 @@ class Screen(object):
         ips[6] = self.pollKey(glfw.KEY_LEFT) # left
         ips[7] = self.pollKey(glfw.KEY_RIGHT) # right
 
-        timenow = time.clock()
-        if timenow < self.fpsLastTime + SECONDS_PER_FRAME * (1.0 - FPS_TOLERANCE):
-            time.sleep(self.fpsLastTime + SECONDS_PER_FRAME - timenow)
-            timenow = time.clock()
+        timenow = time.time()
 
         if self.secondsPerFrame is not None:
+            # this causes segafaults and I don't know why:
+
+            # if self.secondsPerFrame < SECONDS_PER_FRAME:
+            #     targetTime = timenow + SECONDS_PER_FRAME - self.secondsPerFrame
+            #     time.sleep(targetTime - timenow)
+            #     timenow = time.time()
             observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
             self.secondsPerFrame = (SPF_GAIN * observedSpf +
                                     (1 - SPF_GAIN) * self.secondsPerFrame)
