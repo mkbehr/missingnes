@@ -50,10 +50,13 @@ VERTEX_ELTS = 7
 DRAW_BG = True
 DRAW_SPRITES = True
 
-FPS_UPDATE_INTERVAL = 1 # in seconds
-
+FPS_UPDATE_INTERVAL = 2.0 # in seconds
 MAX_FPS = 60
 SECONDS_PER_FRAME = 1.0 / MAX_FPS
+FPS_TOLERANCE = 0.1
+
+# gain determining seconds per frame (as in a kalman filter)
+SPF_GAIN = 0.2
 
 class Screen(object):
 
@@ -71,7 +74,7 @@ class Screen(object):
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE);
 
         window = glfw.create_window(SCREEN_WIDTH, SCREEN_HEIGHT,
-                                    "%s - ?? FPS" % PROGRAM_NAME,
+                                    "%s - (0) ?? FPS" % PROGRAM_NAME,
                                     None, None)
         self.window = window
 
@@ -196,8 +199,9 @@ class Screen(object):
                     ]
 
         self.fpsLastUpdated = None
-        self.fpsLastTime = None
-        self.lastFps = None
+        self.fpsLastTime = 0
+        self.fpsLastDisplayed = 0
+        self.secondsPerFrame = None
 
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
@@ -205,7 +209,7 @@ class Screen(object):
         # TODO bind global palette
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
-        self.on_draw()
+        self.draw_to_buffer()
 
         # Handle controller input.
 
@@ -227,23 +231,29 @@ class Screen(object):
         ips[7] = self.pollKey(glfw.KEY_RIGHT) # right
 
         timenow = time.clock()
-        if self.fpsLastUpdated is None:
-            self.fpsLastUpdated = frame
-            self.fpsLastTime = timenow
-        elif timenow >= self.fpsLastTime + 1:
-            self.lastFps = (frame - self.fpsLastUpdated) * 1.0 / (timenow - self.fpsLastTime)
-            print "calculating FPS"
-            print "frame number is %d; last frame was %d" % (frame, self.fpsLastUpdated)
-            print "time is %f; last time was %f" % (timenow, self.fpsLastTime)
-            print "time per frame %fs; frames per second %f" % (
-                (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated) * 1.0,
-                (frame - self.fpsLastUpdated) * 1.0 / (timenow - self.fpsLastTime))
-            glfw.set_window_title(self.window,
-                                  "%s - %d FPS" % (PROGRAM_NAME, self.lastFps))
-            self.fpsLastUpdated = frame
-            self.fpsLastTime = timenow
+        if timenow < self.fpsLastTime + SECONDS_PER_FRAME * (1.0 - FPS_TOLERANCE):
+            time.sleep(self.fpsLastTime + SECONDS_PER_FRAME - timenow)
+            timenow = time.clock()
 
-    def on_draw(self):
+        if self.secondsPerFrame is not None:
+            observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
+            self.secondsPerFrame = (SPF_GAIN * observedSpf +
+                                    (1 - SPF_GAIN) * self.secondsPerFrame)
+        elif self.fpsLastUpdated is not None:
+            observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
+            self.secondsPerFrame = observedSpf
+        self.fpsLastUpdated = frame
+        self.fpsLastTime = timenow
+        if timenow >= self.fpsLastDisplayed + FPS_UPDATE_INTERVAL:
+            if self.secondsPerFrame is not None:
+                glfw.set_window_title(self.window,
+                                      "%s - (%d) %d FPS" % (PROGRAM_NAME, frame, 1.0/self.secondsPerFrame))
+            self.fpsLastDisplayed = timenow
+
+        glfw.swap_buffers(self.window)
+
+
+    def draw_to_buffer(self):
         (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
         glClearColor(bg_r / 255.0, bg_g / 255.0, bg_b / 255.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT)
@@ -415,7 +425,9 @@ class Screen(object):
             # And now we can draw and hope for the best.
             glDrawArrays(GL_TRIANGLES, 0, nSpriteVertices)
 
-        glfw.swap_buffers(self.window)
+        # Don't swap buffers here; wait until we've had a chance to sleep in order to cap FPS
+
+        # glfw.swap_buffers(self.window)
 
     def maintainBgPaletteTable(self):
         # Note: only call this when self.bgVbo is bound to GL_ARRAY_BUFFER... maybe?
