@@ -5,6 +5,7 @@ have more separation?)
 
 """
 import ctypes
+import threading
 import time
 
 import pyglet
@@ -207,7 +208,18 @@ class Screen(object):
 
         # TODO bind global palette
 
+        # set up gpu thread
+        self.gpuStart = threading.Event()
+        self.gpuDone = threading.Event()
+        self.gpuDone.set() # so we don't deadlock at the start
+        self.gpuThread = GPUThread(self.window, self.gpuStart, self.gpuDone)
+        self.gpuThread.start()
+
+
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
+        self.gpuDone.wait()
+        self.gpuDone.clear()
+
         self.draw_to_buffer()
 
         # Handle controller input.
@@ -252,7 +264,7 @@ class Screen(object):
                                       "%s - (%d) %d FPS" % (PROGRAM_NAME, frame, 1.0/self.secondsPerFrame))
             self.fpsLastDisplayed = timenow
 
-        glfw.swap_buffers(self.window)
+        self.gpuStart.set()
 
 
     def draw_to_buffer(self):
@@ -461,3 +473,17 @@ class Screen(object):
 
     def pollKey(self, key):
         return glfw.get_key(self.window, key) == glfw.PRESS
+
+class GPUThread(threading.Thread):
+    def __init__(self, window, gpuStart, gpuDone):
+        threading.Thread.__init__(self)
+        self.window = window
+        self.gpuStart = gpuStart
+        self.gpuDone = gpuDone
+
+    def run(self):
+        while True:
+            self.gpuStart.wait()
+            self.gpuStart.clear()
+            glfw.swap_buffers(self.window)
+            self.gpuDone.set()
