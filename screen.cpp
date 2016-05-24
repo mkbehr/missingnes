@@ -1,21 +1,18 @@
-// #include <GLFW/glfw3.h>
-
+#include <cstddef>
 #include <iostream>
 #include <string>
 #include <sstream>
 #include <fstream>
 
-#ifdef __APPLE__
-#include <OpenGL/gl.h>
-#include <OpenGL/glu.h>
-#include <GLUT/glut.h>
-#else
-#include <GL/glut.h>
-#endif
-
 using namespace std;
 
 #include "screen.h"
+#include "palette.h"
+
+#define INNER_STRINGIZE(x) #x
+#define STRINGIZE(x) INNER_STRINGIZE(x)
+#define checkGlErrors(cont) \
+  (_checkGlErrors(cont, __FILE__ ":" STRINGIZE(__LINE__)))
 
 void die(void) {
   glfwTerminate();
@@ -30,28 +27,22 @@ const char *glErrorString(GLenum err) {
     return "Invalud value";
   case GL_INVALID_OPERATION:
     return "Invalid operation";
-  case GL_STACK_OVERFLOW:
-    return "Stack overflow";
-  case GL_STACK_UNDERFLOW:
-    return "Stack underflow";
   case GL_OUT_OF_MEMORY:
     return "Out of memory";
   case GL_INVALID_FRAMEBUFFER_OPERATION:
     return "Invalid framebuffer operation";
-  // case GL_CONTEXT_LOST:
-  //   return "Context lost";
-  case GL_TABLE_TOO_LARGE:
-    return "Table too large";
   default:
     return "Unrecognized error";
   }
 }
 
-void checkGlErrors(int continue_after_err) {
+void _checkGlErrors(int continue_after_err,
+		    const char *errloc) {
   GLenum err = GL_NO_ERROR;
-  while ((err = glGetError())) {
+  while ((err = glGetError()) != GL_NO_ERROR) {
     const char *errMsg = glErrorString(err);
-    cerr << "GL error: " << errMsg
+    cerr << errloc
+	 << ": GL error: " << errMsg
 	 << " (" << hex << err << ")\n";
     if (!continue_after_err) {
       die();
@@ -67,6 +58,8 @@ Screen::Screen(void) {
     cerr << "Couldn't create window\n";
     exit(-1);
   }
+  // initWindow also does this check, but let's be safe and make sure
+  // the window made it out of initWindow okay
   if (glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR) < 3) {
     cerr << "Screen: Error: GL major version too low\n";
     die();
@@ -74,12 +67,12 @@ Screen::Screen(void) {
 
   glfwSetInputMode(window, GLFW_STICKY_KEYS, 1);
 
-  // // bind a vertex array
-  // GLuint va;
-  // // TODO rewrite this so it'll compile on not just os x
-  // glGenVertexArraysAPPLE(1, &va);
-  // glBindVertexArrayAPPLE(va);
-  // checkGlErrors(0);
+  // bind a vertex array
+  GLuint va;
+  glGenVertexArrays(1, &va);
+  checkGlErrors(0);
+  glBindVertexArray(va);
+  checkGlErrors(0);
 
   initShaders();
 
@@ -93,6 +86,28 @@ Screen::Screen(void) {
 
   lastBgPalette = -1;
   lastSpritePalette = -1;
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  checkGlErrors(0);
+
+  // things to zero-initialize: local palettes, pattern tables, tile
+  // indices, palette indices
+
+  // There is a more c++ style way to get the array length here. Eh.
+  cerr << "Initializing local palettes\n";
+  memset(localPalettes, 0, LOCAL_PALETTES_LENGTH * sizeof(float));
+
+  // TODO also initialize sprite ptab
+  float zeroPtab[PATTERN_TABLE_LENGTH] = {};
+  cerr << "Initializing background pattern table texture\n";
+  setBgPatternTable(zeroPtab);
+  cerr << "Initializing sprite pattern table texture\n";
+  setSpritePatternTable(zeroPtab);
+
+  // TODO set up tileIndices, paletteIndices, bgVertices
+
+  initBgVertices();
 }
 
 GLint safeGetAttribLocation(GLuint program, const GLchar *name) {
@@ -174,7 +189,7 @@ void Screen::initShaders(void) {
   }
 
   // link shader program
-  GLuint shader = glCreateProgram();
+  shader = glCreateProgram();
   glAttachShader(shader, vertexShader);
   glAttachShader(shader, fragmentShader);
   glLinkProgram(shader);
@@ -209,11 +224,171 @@ void Screen::initShaders(void) {
   paletteNAttrib = safeGetAttribLocation(shader, "v_palette_n");
 }
 
-int main(void) {
-  Screen foo = Screen();
-  glfwTerminate();
-  return 0;
+void Screen::initBgVertices(void) {
+  for (int x = 0; x < TILE_COLUMNS; x++) {
+    unsigned char x_left = x*8;
+    unsigned char x_right = (x+1)*8;
+    unsigned char x_left_high = 0;
+    unsigned char x_right_high = (x_left == 0 ? 1 : 0);
+    for (int y = 0; y < TILE_ROWS; y++) {
+      unsigned char y_bottom = (TILE_ROWS - y - 1) * 8;
+      unsigned char y_top = (TILE_ROWS - y) * 8;
+      unsigned char tile = 0; // this will change
+      unsigned char u_left = 0;
+      unsigned char u_right = 1;
+      unsigned char v_bottom = 1;
+      unsigned char v_top = 0;
+      unsigned char palette_index = 0; // this will change
+      unsigned char vertex_index =
+	(x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
+
+      struct bgVertex bottomLeft =
+	{x_left, y_bottom, x_left_high,
+	 tile, u_left, v_bottom, palette_index};
+      struct bgVertex bottomRight =
+	{x_right, y_bottom, x_right_high,
+	 tile, u_left, v_bottom, palette_index};
+      struct bgVertex topLeft =
+	{x_left, y_top, x_left_high,
+	 tile, u_left, v_top, palette_index};
+      struct bgVertex topRight =
+	{x_right, y_top, x_right_high,
+	 tile, u_left, v_top, palette_index};
+
+      // represent square as two triangles
+      // first triangle
+      bgVertices[vertex_index] = bottomLeft;
+      bgVertices[vertex_index+1] = bottomRight;
+      bgVertices[vertex_index+2] = topRight;
+      // second triangle
+      bgVertices[vertex_index+3] = bottomLeft;
+      bgVertices[vertex_index+4] = topRight;
+      bgVertices[vertex_index+5] = topLeft;
+    }
+  }
 }
+
+// Input should be a pointer to LOCAL_PALETTES_LENGTH floats
+void Screen::setLocalPalettes(float *localPaletteInput) {
+      memcpy(localPalettes, localPaletteInput,
+	     LOCAL_PALETTES_LENGTH * sizeof(float));
+}
+
+void Screen::setBgPatternTable(float *bgPtabInput) {
+  /* Note: according to stackoverflow, glTexImage2D allows the memory
+     to be freed after the call, so I don't have to worry about
+     copying the input over to somewhere stable. I can't find the part
+     of the API that actually says that, but for now I'll trust it.
+
+     http://stackoverflow.com/questions/26499361/opengl-what-does-glteximage2d-do
+  */
+
+  glBindTexture(GL_TEXTURE_2D, bgPtabName);
+  glActiveTexture(BG_PATTERN_TABLE_TEXTURE);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
+	       0, GL_RED, GL_FLOAT, bgPtabInput);
+  checkGlErrors(0);
+}
+
+void Screen::setSpritePatternTable(float *spritePtabInput) {
+  glBindTexture(GL_TEXTURE_2D, spritePtabName);
+  glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
+	       0, GL_RED, GL_FLOAT, spritePtabInput);
+  checkGlErrors(0);
+}
+
+
+void Screen::drawToBuffer() {
+  // State we need by the time we finish this (for background):
+  // - universalBg needs to be set to the universal background palette index
+  // - localPalettes needs to be set to a buffer with the local palettes
+  // - BG_PATTERN_TABLE_TEXTURE needs to be populated with the background pattern table
+  // - we need data for the actual tiles (tileIndices and paletteIndices from the python, set by the ppu)
+  //   (so maybe keep the ppu setting that, and then move it from python to c++)
+
+  unsigned char universalBg = 0x11; // TODO
+  unsigned char *bgPalette = PALETTE[universalBg];
+  glClearColor(((float) bgPalette[0]) / 255.0,
+	       ((float) bgPalette[1]) / 255.0,
+	       ((float) bgPalette[2]) / 255.0,
+	       1.0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+  if (DRAW_BG) {
+    glBindBuffer(GL_ARRAY_BUFFER, bgVbo);
+
+    // From python implementation comments:
+
+    // We need to do this here (anytime before the draw call) and I
+    // don't understand why. The order is important for some reason.
+    glActiveTexture(BG_PATTERN_TABLE_TEXTURE);
+    glBindTexture(GL_TEXTURE_2D, bgPtabName);
+    // TODO maintain bg palette table (or, uh, make sure it's maintained)
+
+    // do we need to call these again? unclear. python code did it but
+    // I don't know why.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    checkGlErrors(0);
+
+    // Set tile and palette. The rest of the values in the VBO won't change.
+    for (int x = 0; x < TILE_COLUMNS; x++) {
+      for (int y = 0; y < TILE_ROWS; y++) {
+	// TODO get tile and palette
+	unsigned char tile = 0;
+	unsigned char palette = 0;
+	int screen_tile_index = (x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
+	for (int vertex_i = 0; vertex_i < VERTICES_PER_TILE; vertex_i++) {
+	  // Seems to crash here
+	  bgVertices[screen_tile_index + vertex_i].tile = tile;
+	  bgVertices[screen_tile_index + vertex_i].palette = palette;
+	}
+      }
+    }
+
+    int stride = sizeof(struct bgVertex);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(bgVertices),
+		 bgVertices, GL_DYNAMIC_DRAW);
+    checkGlErrors(0);
+    glVertexAttribPointer(xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+			  (const GLvoid *) offsetof(struct bgVertex, x_low));
+    glEnableVertexAttribArray(xyAttrib);
+    checkGlErrors(0);
+    glVertexAttribPointer(xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+			  (const GLvoid *) offsetof(struct bgVertex, x_high));
+    glEnableVertexAttribArray(xHighAttrib);
+    checkGlErrors(0);
+    glVertexAttribPointer(tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+			  (const GLvoid *) offsetof(struct bgVertex, tile));
+    glEnableVertexAttribArray(tuvAttrib);
+    checkGlErrors(0);
+    glVertexAttribPointer(paletteNAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+			  (const GLvoid *) offsetof(struct bgVertex, palette));
+    glEnableVertexAttribArray(paletteNAttrib);
+    checkGlErrors(0);
+
+    glUniform1i(glGetUniformLocation(shader, "patternTable"),
+		BG_PATTERN_TABLE_TEXID);
+    checkGlErrors(0);
+
+    // FIXME magic number 16
+    glUniform4fv(glGetUniformLocation(shader, "localPalettes"), 16,
+		 localPalettes);
+    checkGlErrors(0);
+
+    glDrawArrays(GL_TRIANGLES, 0, N_BG_VERTICES);
+    checkGlErrors(0);
+  }
+  if (DRAW_SPRITES) {
+    ; // TODO
+  }
+}
+
 
 int initWindow(GLFWwindow **window_p) {
   /* Initialize the library */
@@ -229,7 +404,7 @@ int initWindow(GLFWwindow **window_p) {
 
   /* Create a windowed mode window and its OpenGL context */
   GLFWwindow *window;
-  window = glfwCreateWindow(640, 480,
+  window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT,
 			    PROGRAM_NAME, NULL, NULL);
   if (!window)
     {
@@ -246,24 +421,31 @@ int initWindow(GLFWwindow **window_p) {
   /* Make the window's context current */
   glfwMakeContextCurrent(window);
 
-  // This is the render loop. Don't actually do it here.
-
-  // /* Loop until the user closes the window */
-  // while (!glfwWindowShouldClose(window))
-  // {
-  //     /* Render here */
-  //   glClearColor(0.4, 0.4, 1.0, 1.0);
-  //   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
-
-  //     /* Swap front and back buffers */
-  //     glfwSwapBuffers(window);
-
-  //     /* Poll for and process events */
-  //     glfwPollEvents();
-  // }
-
-  // glfwTerminate();
-
   *window_p = window;
+  return 0;
+}
+
+void Screen::testRenderLoop(void) {
+
+  /* Loop until the user closes the window */
+  while (!glfwWindowShouldClose(window))
+  {
+    drawToBuffer();
+
+    /* Swap front and back buffers */
+    glfwSwapBuffers(window);
+
+    /* Poll for and process events */
+    glfwPollEvents();
+  }
+
+  glfwTerminate();
+}
+
+int main(void) {
+  Screen foo = Screen();
+  cerr << "Beginning render loop\n";
+  foo.testRenderLoop();
+  glfwTerminate();
   return 0;
 }

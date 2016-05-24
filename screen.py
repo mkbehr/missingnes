@@ -8,19 +8,6 @@ import ctypes
 import threading
 import time
 
-import pyglet
-from pyglet.window import key
-#from pyglet.gl import *
-import pyglet.gl
-
-from OpenGL.GL import *
-from OpenGL.arrays import vbo
-from OpenGL.GL import shaders
-from OpenGL.GL.ARB import vertex_array_object # I don't know
-from OpenGL.GLU import *
-
-import glfw
-
 from PIL import Image
 import numpy as np
 
@@ -49,7 +36,7 @@ SPRITE_PATTERN_TABLE_TEXID = 1
 VERTEX_ELTS = 7
 
 DRAW_BG = True
-DRAW_SPRITES = True
+DRAW_SPRITES = False
 
 FPS_UPDATE_INTERVAL = 2.0 # in seconds
 MAX_FPS = 60
@@ -65,161 +52,20 @@ class Screen(object):
         self.ppu = _ppu
 
 
-        if not glfw.init():
-            assert(false) # fuck it
-
-        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3);
-        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 2);
-        glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, GL_TRUE);
-        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE);
-
-        window = glfw.create_window(SCREEN_WIDTH, SCREEN_HEIGHT,
-                                    "%s - (0) ?? FPS" % PROGRAM_NAME,
-                                    None, None)
-        self.window = window
-
-        if not window:
-            glfw.terminate()
-
-        assert (glfw.get_window_attrib(window, glfw.CONTEXT_VERSION_MAJOR) >= 3)
-
-
-        # Instead of just tracking keys, consider making sure
-        # that when the user presses a button, that button is pressed
-        # in the next frame, even if it's released before the frame is
-        # processed.
-        glfw.set_input_mode(window, glfw.STICKY_KEYS, 1)
-
-
-        vao_id = GLuint(0)
-        # use pyglet because pyopengl doesn't like these functions
-        pyglet.gl.glGenVertexArrays(1, ctypes.byref(vao_id))
-        pyglet.gl.glBindVertexArray(vao_id.value)
-
-        # The x_high here is because x can reach 256, so we need an
-        # extra byte to stop it from wrapping around to 0.
-        vertexShaderSrc = """#version 330
-
-        in vec2 xy;
-        in float x_high;
-        in vec3 v_tuv;
-        in uint v_palette_n;
-
-        out vec2 f_uv;
-        out vec4[4] f_palette;
-
-        uniform vec4[16] localPalettes;
-
-        void main()
-        {
-          gl_Position = vec4(((float(xy.x) + (x_high * 256)) / (16.0*8.0)) - 1,
-                             (float(xy.y) / (15.0*8.0)) - 1, 0.0, 1.0);
-          f_uv = vec2((float(v_tuv.y) / 256.0) + float(v_tuv.x) / 256.0, float(v_tuv.z));
-          for (int i = 0; i < 4; i++) {
-            f_palette[i] = localPalettes[i + int(v_palette_n)*4];
-          }
-        }"""
-        vertexShader = shaders.compileShader(vertexShaderSrc, GL_VERTEX_SHADER)
-
-        fragmentShaderSrc = """#version 330
-
-        in vec2 f_uv;
-        in vec4[4] f_palette;
-
-        out vec4 outColor;
-
-        uniform sampler2D patternTable;
-
-        uniform float[16] localPalettes;
-
-        void main()
-        {
-          float localPaletteIndex;
-          localPaletteIndex = texture(patternTable, f_uv).r;
-          // for now, assume localPaletteIndex will always be valid
-          outColor = f_palette[int(localPaletteIndex)];
-        }"""
-        fragmentShader = shaders.compileShader(fragmentShaderSrc, GL_FRAGMENT_SHADER)
-        self.shader = shaders.compileProgram(vertexShader, fragmentShader)
-        glUseProgram(self.shader)
-
-        self.xyAttrib = glGetAttribLocation(self.shader, "xy")
-        self.xHighAttrib = glGetAttribLocation(self.shader, "x_high");
-        self.tuvAttrib = glGetAttribLocation(self.shader, "v_tuv")
-        self.paletteNAttrib = glGetAttribLocation(self.shader, "v_palette_n")
-
         self.lastBgPalette = None
         self.lastSpritePalette = None
 
-        self.bgVbo = glGenBuffers(1)
-        self.spriteVbo = glGenBuffers(1)
-
-        self.bgPtabName = glGenTextures(1)
-        self.spritePtabName = glGenTextures(1)
-
         self.tileIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
         self.paletteIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
-
-        bgVertexList = [0 for x in range(TILE_COLUMNS * TILE_ROWS * VERTEX_ELTS * 6)]
-        self.bgVertices = (ctypes.c_ubyte * len(bgVertexList)) (*bgVertexList)
-        # Set x, y, u, and v coordinates, because they won't change.
-
-        # Note: x and y coordinates are pixel coordinates, but we need
-        # to store an extra byte for the x coordinate because it can
-        # range from 0 to 256 inclusive.
-        for x in xrange(TILE_COLUMNS):
-            for y in xrange(TILE_ROWS):
-                x_left = x*8
-                x_right = (x+1)*8
-                x_left_high = 0
-                if x_right == 256:
-                    x_right = 0
-                    x_right_high = 1
-                else:
-                    x_right_high = 0
-                y_bottom = (TILE_ROWS - y - 1)*8
-                y_top = (TILE_ROWS - y)*8
-                tile = 0 # this will change
-                u_left = 0
-                u_right = 1
-                v_bottom = 1
-                v_top = 0
-                palette_index = 0 # this will change
-                screen_tile_index = (x + y*TILE_COLUMNS) * VERTEX_ELTS * 6
-                self.bgVertices[screen_tile_index : (screen_tile_index+(VERTEX_ELTS*6))] = [
-                    # do this as two triangles
-                    # first triangle
-                    x_left, y_bottom, x_left_high, tile, u_left, v_bottom, palette_index,
-                    x_right, y_bottom, x_right_high, tile, u_right, v_bottom, palette_index,
-                    x_right, y_top, x_right_high, tile, u_right, v_top, palette_index,
-                    # second triangle
-                    x_left, y_bottom, x_left_high, tile, u_left, v_bottom, palette_index,
-                    x_right, y_top, x_right_high, tile, u_right, v_top, palette_index,
-                    x_left, y_top, x_left_high, tile, u_left, v_top, palette_index,
-                    ]
 
         self.fpsLastUpdated = None
         self.fpsLastTime = 0
         self.fpsLastDisplayed = 0
         self.secondsPerFrame = None
 
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-
-        # TODO bind global palette
-
-        # set up gpu thread
-        self.gpuStart = threading.Event()
-        self.gpuDone = threading.Event()
-        self.gpuDone.set() # so we don't deadlock at the start
-        self.gpuThread = GPUThread(self.window, self.gpuStart, self.gpuDone)
-        self.gpuThread.start()
-
+        self.c_screen = TODO # this should refer to a cpp Screen object
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
-        self.gpuDone.wait()
-        self.gpuDone.clear()
-
         self.draw_to_buffer()
 
         # Handle controller input.
@@ -268,28 +114,11 @@ class Screen(object):
 
 
     def draw_to_buffer(self):
-        (bg_r, bg_g, bg_b) = palette.PALETTE[self.ppu.universalBg]
-        glClearColor(bg_r / 255.0, bg_g / 255.0, bg_b / 255.0, 1.0)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT)
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        c_screen.setUniversalBg(self.ppu.universalBg) # TODO
 
         if DRAW_BG:
-            glBindBuffer(GL_ARRAY_BUFFER, self.bgVbo)
-
-            # We need to do this here (anytime before the draw call) and I
-            # don't really understand why. The order is important for some
-            # reason.
-            glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
-            glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
 
             self.maintainBgPaletteTable()
-
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-            # TODO get rid of some of these magic numbers
 
             # Set tile and palette. The rest of the values in the VBO won't change.
             for x in xrange(TILE_COLUMNS):
@@ -304,31 +133,9 @@ class Screen(object):
             stride = VERTEX_ELTS * ctypes.sizeof(ctypes.c_ubyte)
 
             glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(self.bgVertices), self.bgVertices, GL_DYNAMIC_DRAW)
-
-            # point attributes into that big buffer
-            xyOffset = ctypes.c_void_p(0)
-            glVertexAttribPointer(self.xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride, xyOffset)
-            glEnableVertexAttribArray(self.xyAttrib)
-            xHighOffset = ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_ubyte))
-            glVertexAttribPointer(self.xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride, xHighOffset)
-            glEnableVertexAttribArray(self.xHighAttrib)
-            tuvOffset = ctypes.c_void_p(3 * ctypes.sizeof(ctypes.c_ubyte))
-            glVertexAttribPointer(self.tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride, tuvOffset)
-            glEnableVertexAttribArray(self.tuvAttrib)
-            paletteNOffset = ctypes.c_void_p(6 * ctypes.sizeof(ctypes.c_ubyte))
-            glVertexAttribIPointer(self.paletteNAttrib, 1, GL_UNSIGNED_BYTE, stride, paletteNOffset)
-            glEnableVertexAttribArray(self.paletteNAttrib)
-
-            # point uniform arguments
-            glUniform1i(glGetUniformLocation(self.shader, "patternTable"), BG_PATTERN_TABLE_TEXID)
-
-            # and localPalettes.
             localPaletteList = self.ppu.dumpLocalPalettes(ppu.BG_PALETTE_BASE)
             localPaletteCArray = (ctypes.c_float * len(localPaletteList)) (*localPaletteList)
             glUniform4fv(glGetUniformLocation(self.shader, "localPalettes"), 16, localPaletteCArray)
-
-            # Finally, we should be able to draw.
-            glDrawArrays(GL_TRIANGLES, 0, N_BG_VERTICES)
 
         ## Now do sprites.
         if DRAW_SPRITES:

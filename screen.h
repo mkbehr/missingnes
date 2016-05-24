@@ -1,32 +1,18 @@
+#define GLFW_INCLUDE_GLCOREARB
+// defining GLFW_INCLUDE_GLEXT may also be useful in the future
 #include <GLFW/glfw3.h>
 
-class Screen {
- public:
-  Screen();
-
- private:
-  GLFWwindow *window;
-  // shader attribute locations
-  GLint xyAttrib;
-  GLint xHighAttrib;
-  GLint tuvAttrib;
-  GLint paletteNAttrib;
-
-  // buffers
-  GLuint bgVbo;
-  GLuint spriteVbo;
-  // textures
-  GLuint bgPtabName;
-  GLuint spritePtabName;
-
-
-  // PPU state trackers
-  int lastBgPalette;
-  int lastSpritePalette;
-  // TODO tileIndices, paletteIndices, bgVertices
-
-  void initShaders();
+struct bgVertex {
+  unsigned char x_low;
+  unsigned char y;
+  unsigned char x_high;
+  unsigned char tile;
+  unsigned char u;
+  unsigned char v;
+  unsigned char palette;
 };
+// this may not be necessary now that we can just define a struct
+const int VERTEX_ELTS = sizeof(struct bgVertex);
 
 const char *PROGRAM_NAME = "Missingnes";
 
@@ -47,9 +33,12 @@ const int TILE_COLUMNS = VISIBLE_COLUMNS/8;
 const int SCREEN_WIDTH = VISIBLE_COLUMNS;
 const int SCREEN_HEIGHT = VISIBLE_SCANLINES;
 
-const int N_BG_VERTICES = TILE_ROWS * TILE_COLUMNS * 6;
+const int VERTICES_PER_TILE = 6;
+
+const int N_BG_VERTICES = TILE_ROWS * TILE_COLUMNS * VERTICES_PER_TILE;
 
 const int PATTERN_TABLE_TILES = 256;
+const int PATTERN_TABLE_LENGTH = PATTERN_TABLE_TILES * 8 * 8;
 
 const GLenum BG_PATTERN_TABLE_TEXTURE = GL_TEXTURE0;
 const int BG_PATTERN_TABLE_TEXID = 0;
@@ -57,11 +46,10 @@ const GLenum SPRITE_PATTERN_TABLE_TEXTURE = GL_TEXTURE1;
 const int SPRITE_PATTERN_TABLE_TEXID = 1;
 // TODO other texture ids go here
 
-// number of values (elements) per vertex in the vertex buffer
-const int VERTEX_ELTS = 7;
-
 const int DRAW_BG = 1;
-const int DRAW_SPRITES = 1;
+const int DRAW_SPRITES = 0;
+
+const int LOCAL_PALETTES_LENGTH = 16*4;
 
 const float FPS_UPDATE_INTERVAL = 2.0; // in seconds
 const int MAX_FPS = 60;
@@ -69,6 +57,50 @@ const float SECONDS_PER_FRAME = 1.0 / MAX_FPS;
 
 // gain determining seconds per frame (as in a kalman filter)
 const float SPF_GAIN = 0.2;
+
+class Screen {
+ public:
+  Screen();
+
+  void setLocalPalettes(float*);
+  void setBgPatternTable(float*);
+  void setSpritePatternTable(float*);
+
+  void testRenderLoop();
+
+ private:
+  GLFWwindow *window;
+  GLuint shader;
+  // shader attribute locations
+  GLint xyAttrib;
+  GLint xHighAttrib;
+  GLint tuvAttrib;
+  GLint paletteNAttrib;
+
+  // buffers
+  GLuint bgVbo;
+  GLuint spriteVbo;
+  // textures
+  GLuint bgPtabName;
+  GLuint spritePtabName;
+
+
+  // PPU state trackers
+  int lastBgPalette;
+  int lastSpritePalette;
+  // TODO tileIndices, paletteIndices
+
+  struct bgVertex bgVertices[N_BG_VERTICES];
+
+  float localPalettes[LOCAL_PALETTES_LENGTH];
+
+  void initShaders();
+  void initBgVertices();
+
+  void drawToBuffer();
+};
+
+
 
 int initWindow(GLFWwindow**);
 
