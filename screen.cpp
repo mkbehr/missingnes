@@ -257,7 +257,7 @@ void Screen::initBgVertices(void) {
     unsigned char x_left = x*8;
     unsigned char x_right = (x+1)*8;
     unsigned char x_left_high = 0;
-    unsigned char x_right_high = (x_left == 0 ? 1 : 0);
+    unsigned char x_right_high = (x_right == 0 ? 1 : 0);
     for (int y = 0; y < TILE_ROWS; y++) {
       unsigned char y_bottom = (TILE_ROWS - y - 1) * 8;
       unsigned char y_top = (TILE_ROWS - y) * 8;
@@ -267,7 +267,8 @@ void Screen::initBgVertices(void) {
       unsigned char v_bottom = 1;
       unsigned char v_top = 0;
       unsigned char palette_index = 0; // this will change
-      unsigned char vertex_index =
+
+      int vertex_index =
 	(x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
 
       struct bgVertex bottomLeft =
@@ -350,7 +351,6 @@ void Screen::drawToBuffer() {
     glBindBuffer(GL_ARRAY_BUFFER, bgVbo);
 
     // From python implementation comments:
-
     // We need to do this here (anytime before the draw call) and I
     // don't understand why. The order is important for some reason.
     glActiveTexture(BG_PATTERN_TABLE_TEXTURE);
@@ -372,7 +372,6 @@ void Screen::drawToBuffer() {
 	unsigned char palette = 0;
 	int screen_tile_index = (x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
 	for (int vertex_i = 0; vertex_i < VERTICES_PER_TILE; vertex_i++) {
-	  // Seems to crash here
 	  bgVertices[screen_tile_index + vertex_i].tile = tile;
 	  bgVertices[screen_tile_index + vertex_i].palette = palette;
 	}
