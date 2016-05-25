@@ -4,6 +4,9 @@
 #include <sstream>
 #include <fstream>
 
+#include <unistd.h>
+#include <sys/param.h>
+
 using namespace std;
 
 #include "screen.h"
@@ -52,12 +55,26 @@ void _checkGlErrors(int continue_after_err,
 
 Screen::Screen(void) {
 
-  // TODO assign pointer to PPU object
+  // Bit of a hack here: initializing the window will change the
+  // working directory for some reason, so store it and change it back
+  char cwd[MAXPATHLEN];
+  if (!getcwd(cwd, MAXPATHLEN)) {
+    cerr << "Couldn't get working directory\n";
+    die();
+  }
+
+  // TODO assign pointer to PPU object (or let python handle that interface)
 
   if (initWindow(&window) < 0) {
     cerr << "Couldn't create window\n";
-    exit(-1);
+    die();
   }
+
+  if (chdir(cwd) != 0) {
+    cerr << "Couldn't reset working directory\n";
+    die();
+  }
+
   // initWindow also does this check, but let's be safe and make sure
   // the window made it out of initWindow okay
   if (glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR) < 3) {
@@ -122,21 +139,32 @@ GLint safeGetAttribLocation(GLuint program, const GLchar *name) {
 
 // doesn't return an error message, just exits the program on error
 void Screen::initShaders(void) {
-    // get shaders
+  // get shaders
   ifstream vertFile(VERTEX_SHADER_FILE);
+  if (!vertFile) {
+    cerr << "Couldn't open vertex shader file\n";
+    die();
+  }
   stringstream vertBuffer;
   vertBuffer << vertFile.rdbuf();
   // This approach makes the string turn into the empty string for some reason
   // const char *vertSrc = vertBuffer.str().c_str();
   string vertStr = vertBuffer.str();
   const char *vertSrc = vertStr.c_str();
-  int vertSrcLen = vertStr.length();
+  // TODO error-check and make sure the file isn't too big
+  int vertSrcLen = (int) vertStr.length();
+  printf("Read vertex shader file with length %d\n", vertSrcLen);
   ifstream fragFile(FRAGMENT_SHADER_FILE);
+  if (!fragFile) {
+    cerr << "Couldn't open fragment shader file\n";
+    die();
+  }
   stringstream fragBuffer;
   fragBuffer << fragFile.rdbuf();
   string fragStr = fragBuffer.str();
   const char *fragSrc = fragStr.c_str();
-  int fragSrcLen = fragStr.length();
+  int fragSrcLen = (int) fragStr.length();
+  printf("Read fragment shader file with length %d\n", vertSrcLen);
 
 
   // compile shaders
@@ -247,13 +275,13 @@ void Screen::initBgVertices(void) {
 	 tile, u_left, v_bottom, palette_index};
       struct bgVertex bottomRight =
 	{x_right, y_bottom, x_right_high,
-	 tile, u_left, v_bottom, palette_index};
+	 tile, u_right, v_bottom, palette_index};
       struct bgVertex topLeft =
 	{x_left, y_top, x_left_high,
 	 tile, u_left, v_top, palette_index};
       struct bgVertex topRight =
 	{x_right, y_top, x_right_high,
-	 tile, u_left, v_top, palette_index};
+	 tile, u_right, v_top, palette_index};
 
       // represent square as two triangles
       // first triangle
@@ -307,7 +335,7 @@ void Screen::drawToBuffer() {
   // - we need data for the actual tiles (tileIndices and paletteIndices from the python, set by the ppu)
   //   (so maybe keep the ppu setting that, and then move it from python to c++)
 
-  unsigned char universalBg = 0x11; // TODO
+  unsigned char universalBg = 0x2c; // TODO
   unsigned char *bgPalette = PALETTE[universalBg];
   glClearColor(((float) bgPalette[0]) / 255.0,
 	       ((float) bgPalette[1]) / 255.0,
@@ -389,6 +417,16 @@ void Screen::drawToBuffer() {
   }
 }
 
+int Screen::draw() {
+  glfwSwapBuffers(window);
+  glfwPollEvents();
+  if (glfwWindowShouldClose(window)) {
+    glfwTerminate();
+    return 1;
+  }
+  return 0;
+}
+
 
 int initWindow(GLFWwindow **window_p) {
   /* Initialize the library */
@@ -442,10 +480,10 @@ void Screen::testRenderLoop(void) {
   glfwTerminate();
 }
 
-int main(void) {
-  Screen foo = Screen();
-  cerr << "Beginning render loop\n";
-  foo.testRenderLoop();
-  glfwTerminate();
-  return 0;
-}
+// int main(void) {
+//   Screen foo = Screen();
+//   cerr << "Beginning render loop\n";
+//   foo.testRenderLoop();
+//   glfwTerminate();
+//   return 0;
+// }

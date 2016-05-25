@@ -1,3 +1,6 @@
+#ifndef SCREEN_H
+#define SCREEN_H
+
 #define GLFW_INCLUDE_GLCOREARB
 // defining GLFW_INCLUDE_GLEXT may also be useful in the future
 #include <GLFW/glfw3.h>
@@ -67,6 +70,8 @@ class Screen {
   void setSpritePatternTable(float*);
 
   void testRenderLoop();
+  void drawToBuffer();
+  int draw();
 
  private:
   GLFWwindow *window;
@@ -97,7 +102,7 @@ class Screen {
   void initShaders();
   void initBgVertices();
 
-  void drawToBuffer();
+
 };
 
 
@@ -105,3 +110,5 @@ class Screen {
 int initWindow(GLFWwindow**);
 
 void die();
+
+#endif
