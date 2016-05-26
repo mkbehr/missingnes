@@ -24,7 +24,7 @@ find_library(CoreVideo_FRAMEWORK CoreVideo)
 find_package(Boost 1.60.0)
 if(Boost_FOUND)
   # TODO make less platform-specific
-  include_directories("${Boost_INCLUDE_DIRS}" ${GLFW_INCLUDE_DIRS} "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/System/Library/Frameworks/Python.framework/Versions/2.7/include/python2.7/")
+  include_directories(SYSTEM "${Boost_INCLUDE_DIRS}" ${GLFW_INCLUDE_DIRS} "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/System/Library/Frameworks/Python.framework/Versions/2.7/include/python2.7/")
   message("${GLFW_LIBRARY_DIRS}")
   link_directories("${GLFW_LIBRARY_DIRS}")
   set(Boost_USE_STATIC_LIBS OFF)

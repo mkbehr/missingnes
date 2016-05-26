@@ -498,7 +498,7 @@ void Screen::testRenderLoop(void) {
 
 using namespace boost::python;
 
-BOOST_PYTHON_MODULE(boostscreen) {
+BOOST_PYTHON_MODULE(libscreen) {
   class_<Screen>("Screen")
     .def("drawToBuffer", &Screen::drawToBuffer)
     .def("draw", &Screen::draw)
