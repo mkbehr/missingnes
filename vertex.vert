@@ -3,7 +3,7 @@
 in vec2 xy;
 in float x_high;
 in vec3 v_tuv;
-in uint v_palette_n;
+in float v_palette_n; // Why are these floats? I don't know, but it works.
 
 out vec2 f_uv;
 out vec4[4] f_palette;
