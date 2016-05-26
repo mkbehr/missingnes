@@ -14,6 +14,8 @@ import numpy as np
 import palette
 import ppu
 
+import cscreen
+
 PROGRAM_NAME = "Missingnes"
 
 TILE_ROWS = ppu.VISIBLE_SCANLINES/8
@@ -51,7 +53,6 @@ class Screen(object):
 
         self.ppu = _ppu
 
-
         self.lastBgPalette = None
         self.lastSpritePalette = None
 
@@ -63,14 +64,19 @@ class Screen(object):
         self.fpsLastDisplayed = 0
         self.secondsPerFrame = None
 
-        self.c_screen = TODO # this should refer to a cpp Screen object
+        cscreen.init()
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         self.draw_to_buffer()
 
+        # TODO reinstate FPS-capping code
+        cscreen.draw()
+
+        return
+
         # Handle controller input.
 
-        glfw.poll_events()
+        #glfw.poll_events()
 
         # TODO: use fewer magic numbers and put together a proper
         # structure for this code.
@@ -78,39 +84,39 @@ class Screen(object):
         # forgive me demeter for I have sinned
         ips = self.ppu.cpu.controller.inputState.states
 
-        ips[0] = self.pollKey(glfw.KEY_A) # A
-        ips[1] = self.pollKey(glfw.KEY_S) # B
-        ips[2] = self.pollKey(glfw.KEY_BACKSLASH) # select: mapping to \ for now
-        ips[3] = self.pollKey(glfw.KEY_ENTER) # start
-        ips[4] = self.pollKey(glfw.KEY_UP) # up
-        ips[5] = self.pollKey(glfw.KEY_DOWN) # down
-        ips[6] = self.pollKey(glfw.KEY_LEFT) # left
-        ips[7] = self.pollKey(glfw.KEY_RIGHT) # right
+        # ips[0] = self.pollKey(glfw.KEY_A) # A
+        # ips[1] = self.pollKey(glfw.KEY_S) # B
+        # ips[2] = self.pollKey(glfw.KEY_BACKSLASH) # select: mapping to \ for now
+        # ips[3] = self.pollKey(glfw.KEY_ENTER) # start
+        # ips[4] = self.pollKey(glfw.KEY_UP) # up
+        # ips[5] = self.pollKey(glfw.KEY_DOWN) # down
+        # ips[6] = self.pollKey(glfw.KEY_LEFT) # left
+        # ips[7] = self.pollKey(glfw.KEY_RIGHT) # right
 
         timenow = time.time()
 
-        if self.secondsPerFrame is not None:
-            # this causes segafaults and I don't know why:
+        # if self.secondsPerFrame is not None:
+        #     # this causes segafaults and I don't know why:
 
-            # if self.secondsPerFrame < SECONDS_PER_FRAME:
-            #     targetTime = timenow + SECONDS_PER_FRAME - self.secondsPerFrame
-            #     time.sleep(targetTime - timenow)
-            #     timenow = time.time()
-            observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
-            self.secondsPerFrame = (SPF_GAIN * observedSpf +
-                                    (1 - SPF_GAIN) * self.secondsPerFrame)
-        elif self.fpsLastUpdated is not None:
-            observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
-            self.secondsPerFrame = observedSpf
-        self.fpsLastUpdated = frame
-        self.fpsLastTime = timenow
-        if timenow >= self.fpsLastDisplayed + FPS_UPDATE_INTERVAL:
-            if self.secondsPerFrame is not None:
-                glfw.set_window_title(self.window,
-                                      "%s - (%d) %d FPS" % (PROGRAM_NAME, frame, 1.0/self.secondsPerFrame))
-            self.fpsLastDisplayed = timenow
+        #     # if self.secondsPerFrame < SECONDS_PER_FRAME:
+        #     #     targetTime = timenow + SECONDS_PER_FRAME - self.secondsPerFrame
+        #     #     time.sleep(targetTime - timenow)
+        #     #     timenow = time.time()
+        #     observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
+        #     self.secondsPerFrame = (SPF_GAIN * observedSpf +
+        #                             (1 - SPF_GAIN) * self.secondsPerFrame)
+        # elif self.fpsLastUpdated is not None:
+        #     observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
+        #     self.secondsPerFrame = observedSpf
+        # self.fpsLastUpdated = frame
+        # self.fpsLastTime = timenow
+        # if timenow >= self.fpsLastDisplayed + FPS_UPDATE_INTERVAL:
+        #     if self.secondsPerFrame is not None:
+        #         glfw.set_window_title(self.window,
+        #                               "%s - (%d) %d FPS" % (PROGRAM_NAME, frame, 1.0/self.secondsPerFrame))
+        #     self.fpsLastDisplayed = timenow
 
-        self.gpuStart.set()
+        # self.gpuStart.set()
 
 
     def draw_to_buffer(self):

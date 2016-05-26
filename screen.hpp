@@ -5,6 +5,8 @@
 // defining GLFW_INCLUDE_GLEXT may also be useful in the future
 #include <GLFW/glfw3.h>
 
+#include <boost/python.hpp>
+
 struct bgVertex {
   unsigned char x_low;
   unsigned char y;

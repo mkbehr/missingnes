@@ -9,8 +9,8 @@
 
 using namespace std;
 
-#include "screen.h"
-#include "palette.h"
+#include "screen.hpp"
+#include "palette.hpp"
 
 #define INNER_STRINGIZE(x) #x
 #define STRINGIZE(x) INNER_STRINGIZE(x)
@@ -114,9 +114,17 @@ Screen::Screen(void) {
   // There is a more c++ style way to get the array length here. Eh.
   cerr << "Initializing local palettes\n";
   memset(localPalettes, 0, LOCAL_PALETTES_LENGTH * sizeof(float));
+  // DEBUG
+  for (int i=0; i < LOCAL_PALETTES_LENGTH; i++) {
+    localPalettes[i] = (float) (i%10);
+  }
 
   // TODO also initialize sprite ptab
   float zeroPtab[PATTERN_TABLE_LENGTH] = {};
+  // DEBUG
+  for (int i=0; i < PATTERN_TABLE_LENGTH; i++) {
+    zeroPtab[i] = (float) (i%4);
+  }
   cerr << "Initializing background pattern table texture\n";
   setBgPatternTable(zeroPtab);
   cerr << "Initializing sprite pattern table texture\n";
@@ -293,6 +301,7 @@ void Screen::initBgVertices(void) {
       bgVertices[vertex_index+3] = bottomLeft;
       bgVertices[vertex_index+4] = topRight;
       bgVertices[vertex_index+5] = topLeft;
+      // TODO: look into using point sprites instead of triangles
     }
   }
 }
@@ -486,3 +495,12 @@ void Screen::testRenderLoop(void) {
 //   glfwTerminate();
 //   return 0;
 // }
+
+using namespace boost::python;
+
+BOOST_PYTHON_MODULE(boostscreen) {
+  class_<Screen>("Screen")
+    .def("drawToBuffer", &Screen::drawToBuffer)
+    .def("draw", &Screen::draw)
+    ;
+}
