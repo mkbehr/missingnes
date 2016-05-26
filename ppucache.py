@@ -1,6 +1,3 @@
-from PIL import Image
-import pyglet
-
 import palette
 
 class PPUCache(object):
@@ -117,7 +114,7 @@ class PPUCache(object):
         yIndices = range(8)
         if flipV:
             yIndices.reverse()
-        
+
         img_bytes = bytearray(8*8*4)
         i = 0
         for y in yIndices:

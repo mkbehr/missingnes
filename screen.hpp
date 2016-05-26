@@ -1,11 +1,14 @@
 #ifndef SCREEN_H
 #define SCREEN_H
 
+#include <vector>
+
 #define GLFW_INCLUDE_GLCOREARB
 // defining GLFW_INCLUDE_GLEXT may also be useful in the future
 #include <GLFW/glfw3.h>
 
 #include <boost/python.hpp>
+#include <boost/python/stl_iterator.hpp>
 
 struct bgVertex {
   unsigned char x_low;
@@ -67,9 +70,12 @@ class Screen {
  public:
   Screen();
 
-  void setLocalPalettes(float*);
-  void setBgPatternTable(float*);
-  void setSpritePatternTable(float*);
+  void setUniversalBg(int);
+  void setLocalPalettes(vector<float>);
+  void setBgPatternTable(vector<float>);
+  void setSpritePatternTable(vector<float>);
+  void setTileIndices(vector<vector<unsigned char> >);
+  void setPaletteIndices(vector<vector<unsigned char> >);
 
   void testRenderLoop();
   void drawToBuffer();
@@ -92,14 +98,21 @@ class Screen {
   GLuint spritePtabName;
 
 
-  // PPU state trackers
+  // PPU state trackers (unused here?)
   int lastBgPalette;
   int lastSpritePalette;
-  // TODO tileIndices, paletteIndices
+
+  // state
+  vector<vector<unsigned char> > tileIndices;
+  vector<vector<unsigned char> > paletteIndices;
 
   struct bgVertex bgVertices[N_BG_VERTICES];
 
   float localPalettes[LOCAL_PALETTES_LENGTH];
+
+  int universalBg;
+
+  // methods
 
   void initShaders();
   void initBgVertices();

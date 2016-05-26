@@ -3,9 +3,12 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <cassert>
 
 #include <unistd.h>
 #include <sys/param.h>
+
+
 
 using namespace std;
 
@@ -114,25 +117,27 @@ Screen::Screen(void) {
   // There is a more c++ style way to get the array length here. Eh.
   cerr << "Initializing local palettes\n";
   memset(localPalettes, 0, LOCAL_PALETTES_LENGTH * sizeof(float));
-  // DEBUG
-  for (int i=0; i < LOCAL_PALETTES_LENGTH; i++) {
-    localPalettes[i] = (float) (i%10);
-  }
 
   // TODO also initialize sprite ptab
-  float zeroPtab[PATTERN_TABLE_LENGTH] = {};
-  // DEBUG
-  for (int i=0; i < PATTERN_TABLE_LENGTH; i++) {
-    zeroPtab[i] = (float) (i%4);
-  }
+  vector<float> zeroPtab(PATTERN_TABLE_LENGTH, 0);
   cerr << "Initializing background pattern table texture\n";
   setBgPatternTable(zeroPtab);
   cerr << "Initializing sprite pattern table texture\n";
   setSpritePatternTable(zeroPtab);
 
-  // TODO set up tileIndices, paletteIndices, bgVertices
+  // set up state
 
   initBgVertices();
+
+  // there's probably a cleaner c++ way to do this
+  tileIndices.resize(TILE_COLUMNS);
+  paletteIndices.resize(TILE_COLUMNS);
+  for (int i = 0; i < TILE_COLUMNS; i++) {
+    tileIndices[i].resize(TILE_ROWS);
+    paletteIndices[i].resize(TILE_ROWS);
+  }
+
+  setUniversalBg(0);
 }
 
 GLint safeGetAttribLocation(GLuint program, const GLchar *name) {
@@ -306,13 +311,26 @@ void Screen::initBgVertices(void) {
   }
 }
 
-// Input should be a pointer to LOCAL_PALETTES_LENGTH floats
-void Screen::setLocalPalettes(float *localPaletteInput) {
-      memcpy(localPalettes, localPaletteInput,
-	     LOCAL_PALETTES_LENGTH * sizeof(float));
+void Screen::setUniversalBg(int bg) {
+  // TODO check that this is a valid index into PALETTE
+  universalBg = bg;
 }
 
-void Screen::setBgPatternTable(float *bgPtabInput) {
+void Screen::setLocalPalettes(vector<float> localPaletteInput) {
+  assert(localPaletteInput.size() == LOCAL_PALETTES_LENGTH);
+  memcpy(localPalettes, localPaletteInput.data(),
+	 LOCAL_PALETTES_LENGTH * sizeof(float));
+}
+
+void Screen::setTileIndices(vector<vector<unsigned char> > tiles) {
+  tileIndices = tiles;
+}
+
+void Screen::setPaletteIndices(vector<vector<unsigned char> > palettes) {
+  paletteIndices = palettes;
+}
+
+void Screen::setBgPatternTable(vector<float> bgPtabInput) {
   /* Note: according to stackoverflow, glTexImage2D allows the memory
      to be freed after the call, so I don't have to worry about
      copying the input over to somewhere stable. I can't find the part
@@ -321,18 +339,21 @@ void Screen::setBgPatternTable(float *bgPtabInput) {
      http://stackoverflow.com/questions/26499361/opengl-what-does-glteximage2d-do
   */
 
+  // TODO fix magic number
+  assert(bgPtabInput.size() == 8*8*PATTERN_TABLE_TILES);
   glBindTexture(GL_TEXTURE_2D, bgPtabName);
   glActiveTexture(BG_PATTERN_TABLE_TEXTURE);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
-	       0, GL_RED, GL_FLOAT, bgPtabInput);
+	       0, GL_RED, GL_FLOAT, bgPtabInput.data());
   checkGlErrors(0);
 }
 
-void Screen::setSpritePatternTable(float *spritePtabInput) {
+void Screen::setSpritePatternTable(vector<float> spritePtabInput) {
+  assert(spritePtabInput.size() == 8*8*PATTERN_TABLE_TILES);
   glBindTexture(GL_TEXTURE_2D, spritePtabName);
   glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
-	       0, GL_RED, GL_FLOAT, spritePtabInput);
+	       0, GL_RED, GL_FLOAT, spritePtabInput.data());
   checkGlErrors(0);
 }
 
@@ -345,7 +366,7 @@ void Screen::drawToBuffer() {
   // - we need data for the actual tiles (tileIndices and paletteIndices from the python, set by the ppu)
   //   (so maybe keep the ppu setting that, and then move it from python to c++)
 
-  unsigned char universalBg = 0x2c; // TODO
+  assert(universalBg < N_PALETTES);
   unsigned char *bgPalette = PALETTE[universalBg];
   glClearColor(((float) bgPalette[0]) / 255.0,
 	       ((float) bgPalette[1]) / 255.0,
@@ -376,9 +397,8 @@ void Screen::drawToBuffer() {
     // Set tile and palette. The rest of the values in the VBO won't change.
     for (int x = 0; x < TILE_COLUMNS; x++) {
       for (int y = 0; y < TILE_ROWS; y++) {
-	// TODO get tile and palette
-	unsigned char tile = 0;
-	unsigned char palette = 0;
+	unsigned char tile = tileIndices[x][y];
+	unsigned char palette = paletteIndices[x][y];
 	int screen_tile_index = (x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
 	for (int vertex_i = 0; vertex_i < VERTICES_PER_TILE; vertex_i++) {
 	  bgVertices[screen_tile_index + vertex_i].tile = tile;
@@ -388,7 +408,7 @@ void Screen::drawToBuffer() {
     }
 
     int stride = sizeof(struct bgVertex);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(bgVertices),
+    glBufferData(GL_ARRAY_BUFFER, N_BG_VERTICES * sizeof(bgVertex),
 		 bgVertices, GL_DYNAMIC_DRAW);
     checkGlErrors(0);
     glVertexAttribPointer(xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride,
@@ -412,6 +432,13 @@ void Screen::drawToBuffer() {
 		BG_PATTERN_TABLE_TEXID);
     checkGlErrors(0);
 
+    // for (int i = 0; i < LOCAL_PALETTES_LENGTH; i++) {
+    //   cerr << localPalettes[i] << " ";
+    //   if (i % 4 == 3) {
+    // 	cerr << "\n";
+    //   }
+    // }
+    // cerr << "\n";
     // FIXME magic number 16
     glUniform4fv(glGetUniformLocation(shader, "localPalettes"), 16,
 		 localPalettes);
@@ -496,11 +523,88 @@ void Screen::testRenderLoop(void) {
 //   return 0;
 // }
 
+// iterable_converter struct from
+// http://stackoverflow.com/questions/15842126/feeding-a-python-list-into-a-function-taking-in-a-vector-with-boost-python
+
+/// @brief Type that allows for registration of conversions from
+///        python iterable types.
+struct iterable_converter
+{
+  /// @note Registers converter from a python interable type to the
+  ///       provided type.
+  template <typename Container>
+  iterable_converter&
+  from_python()
+  {
+    boost::python::converter::registry::push_back(
+      &iterable_converter::convertible,
+      &iterable_converter::construct<Container>,
+      boost::python::type_id<Container>());
+
+    // Support chaining.
+    return *this;
+  }
+
+  /// @brief Check if PyObject is iterable.
+  static void* convertible(PyObject* object)
+  {
+    return PyObject_GetIter(object) ? object : NULL;
+  }
+
+  /// @brief Convert iterable PyObject to C++ container type.
+  ///
+  /// Container Concept requirements:
+  ///
+  ///   * Container::value_type is CopyConstructable.
+  ///   * Container can be constructed and populated with two iterators.
+  ///     I.e. Container(begin, end)
+  template <typename Container>
+  static void construct(
+    PyObject* object,
+    boost::python::converter::rvalue_from_python_stage1_data* data)
+  {
+    namespace python = boost::python;
+    // Object is a borrowed reference, so create a handle indicting it is
+    // borrowed for proper reference counting.
+    python::handle<> handle(python::borrowed(object));
+
+    // Obtain a handle to the memory block that the converter has allocated
+    // for the C++ type.
+    typedef python::converter::rvalue_from_python_storage<Container>
+                                                                storage_type;
+    void* storage = reinterpret_cast<storage_type*>(data)->storage.bytes;
+
+    typedef python::stl_input_iterator<typename Container::value_type>
+                                                                    iterator;
+
+    // Allocate the C++ type into the converter's memory block, and assign
+    // its handle to the converter's convertible variable.  The C++
+    // container is populated by passing the begin and end iterators of
+    // the python object to the container's constructor.
+    new (storage) Container(
+      iterator(python::object(handle)), // begin
+      iterator());                      // end
+    data->convertible = storage;
+  }
+};
+
 using namespace boost::python;
 
 BOOST_PYTHON_MODULE(libscreen) {
+
+  iterable_converter()
+    .from_python<std::vector<float> >()
+    .from_python<std::vector<unsigned char> >()
+    .from_python<std::vector<std::vector<unsigned char> > >()
+    ;
+
   class_<Screen>("Screen")
     .def("drawToBuffer", &Screen::drawToBuffer)
     .def("draw", &Screen::draw)
+    .def("setUniversalBg", &Screen::setUniversalBg)
+    .def("setLocalPalettes", &Screen::setLocalPalettes)
+    .def("setBgPatternTable", &Screen::setBgPatternTable)
+    .def("setTileIndices", &Screen::setTileIndices)
+    .def("setPaletteIndices", &Screen::setPaletteIndices)
     ;
 }

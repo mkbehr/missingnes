@@ -23,16 +23,16 @@ PALETTE = np.array([
     (160, 214, 228),  (160, 162, 160),  (  0,   0,   0),  (  0,   0,   0)  # $3c
 ], dtype='uint8')
 
-PALETTE_BYTES = PALETTE[:].tobytes()
+# PALETTE_BYTES = PALETTE[:].tobytes()
 
-# some ugly code here as I figure out the best format to have this in
-RGBA_PALETTE_BYTEENTRIES = []
-for (r,g,b) in PALETTE:
-    RGBA_PALETTE_BYTEENTRIES.append(chr(r) + chr(g) + chr(b) + chr(255))
+# # some ugly code here as I figure out the best format to have this in
+# RGBA_PALETTE_BYTEENTRIES = []
+# for (r,g,b) in PALETTE:
+#     RGBA_PALETTE_BYTEENTRIES.append(chr(r) + chr(g) + chr(b) + chr(255))
 
 def palette(index):
     return PALETTE[index,:]
 
-def smallPaletteBytes(bg, paletteData):
-    # excessively long but I don't want to look up library functions
-    return PALETTE[[bg, paletteData[0], paletteData[1], paletteData[2]],:].tobytes()
+# def smallPaletteBytes(bg, paletteData):
+#     # excessively long but I don't want to look up library functions
+#     return PALETTE[[bg, paletteData[0], paletteData[1], paletteData[2]],:].tobytes()

@@ -1,4 +1,5 @@
-unsigned char PALETTE[][3] =
+#define N_PALETTES 0x40
+unsigned char PALETTE[N_PALETTES][3] =
   {
    //            0                 1                 2                 3
    { 84,  84,  84},  {  0,  30, 116},  {  8,  16, 144},  { 48,   0, 136}, // $00

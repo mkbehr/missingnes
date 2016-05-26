@@ -5,8 +5,6 @@ import palette
 import ppucache
 import sprite
 
-from OpenGL.GL import * # TODO this file does not want GL code
-
 DRAW_GRID = False
 
 PPU_DEBUG = False
@@ -379,12 +377,12 @@ class PPU(object):
                            ord(self.cpu.mem.ppuRead(paletteAddr+1)),
                            ord(self.cpu.mem.ppuRead(paletteAddr+2))]
 
-            spriteTex = self.cache.spriteTexture(
-                base = self.spritePatternTableAddr,
-                tile = tileIndex,
-                flipH = horizontalMirror,
-                flipV = verticalMirror,
-                paletteData = paletteData)
+            # spriteTex = self.cache.spriteTexture(
+            #     base = self.spritePatternTableAddr,
+            #     tile = tileIndex,
+            #     flipH = horizontalMirror,
+            #     flipV = verticalMirror,
+            #     paletteData = paletteData)
             # TODO assign texture to tile
 
             # self.pgscreen.spriteSprites[sprite_i]._set_texture(spriteTex)
