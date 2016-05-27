@@ -322,12 +322,51 @@ void Screen::setLocalPalettes(vector<float> localPaletteInput) {
 	 LOCAL_PALETTES_LENGTH * sizeof(float));
 }
 
+// Assumes that the input is exactly LOCAL_PALETTES_LENGTH long
+void Screen::setLocalPalettes(float *localPaletteInput) {
+  memcpy(localPalettes, localPaletteInput,
+	 LOCAL_PALETTES_LENGTH * sizeof(float));
+}
+
 void Screen::setTileIndices(vector<vector<unsigned char> > tiles) {
   tileIndices = tiles;
 }
 
+void Screen::setTileIndices(unsigned char *tiles) {
+  // this is probably slower than it needs to be, but let's just make
+  // it work for now
+  tileIndices.resize(TILE_COLUMNS);
+  for (int x = 0; x < TILE_COLUMNS; x++) {
+    tileIndices[x].resize(TILE_ROWS);
+    for (int y = 0; y < TILE_ROWS; y++) {
+      tileIndices[x][y] = tiles[(x * TILE_ROWS) + y];
+    }
+  }
+}
+
 void Screen::setPaletteIndices(vector<vector<unsigned char> > palettes) {
   paletteIndices = palettes;
+}
+
+void Screen::setPaletteIndices(unsigned char *indices) {
+  // this is probably slower than it needs to be, but let's just make
+  // it work for now
+  paletteIndices.resize(TILE_COLUMNS);
+  for (int x = 0; x < TILE_COLUMNS; x++) {
+    paletteIndices[x].resize(TILE_ROWS);
+    for (int y = 0; y < TILE_ROWS; y++) {
+      paletteIndices[x][y] = indices[(x * TILE_ROWS) + y];
+    }
+  }
+}
+
+// assume the size is equal to 8*8*PATTERN_TABLE_TILES (TODO fix magic number)
+void Screen::setBgPatternTable(float *bgPtabInput) {
+  glBindTexture(GL_TEXTURE_2D, bgPtabName);
+  glActiveTexture(BG_PATTERN_TABLE_TEXTURE);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
+	       0, GL_RED, GL_FLOAT, bgPtabInput);
+  checkGlErrors(0);
 }
 
 void Screen::setBgPatternTable(vector<float> bgPtabInput) {
@@ -341,20 +380,20 @@ void Screen::setBgPatternTable(vector<float> bgPtabInput) {
 
   // TODO fix magic number
   assert(bgPtabInput.size() == 8*8*PATTERN_TABLE_TILES);
-  glBindTexture(GL_TEXTURE_2D, bgPtabName);
-  glActiveTexture(BG_PATTERN_TABLE_TEXTURE);
+  setBgPatternTable(bgPtabInput.data());
+}
+
+void Screen::setSpritePatternTable(float *spritePtabInput) {
+  glBindTexture(GL_TEXTURE_2D, spritePtabName);
+  glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
-	       0, GL_RED, GL_FLOAT, bgPtabInput.data());
+	       0, GL_RED, GL_FLOAT, spritePtabInput);
   checkGlErrors(0);
 }
 
 void Screen::setSpritePatternTable(vector<float> spritePtabInput) {
   assert(spritePtabInput.size() == 8*8*PATTERN_TABLE_TILES);
-  glBindTexture(GL_TEXTURE_2D, spritePtabName);
-  glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
-	       0, GL_RED, GL_FLOAT, spritePtabInput.data());
-  checkGlErrors(0);
+  setSpritePatternTable(spritePtabInput.data());
 }
 
 
@@ -432,13 +471,6 @@ void Screen::drawToBuffer() {
 		BG_PATTERN_TABLE_TEXID);
     checkGlErrors(0);
 
-    // for (int i = 0; i < LOCAL_PALETTES_LENGTH; i++) {
-    //   cerr << localPalettes[i] << " ";
-    //   if (i % 4 == 3) {
-    // 	cerr << "\n";
-    //   }
-    // }
-    // cerr << "\n";
     // FIXME magic number 16
     glUniform4fv(glGetUniformLocation(shader, "localPalettes"), 16,
 		 localPalettes);
@@ -523,6 +555,61 @@ void Screen::testRenderLoop(void) {
 //   return 0;
 // }
 
+// ctypes interface (to replace boost.python)
+
+extern "C" {
+
+  Screen *ex_constructScreen(void) {
+    return new Screen();
+  }
+
+  void ex_dumbTest(void) {
+    Screen *foo = new Screen();
+    foo->setUniversalBg(3);
+    foo->drawToBuffer();
+    foo->draw();
+  }
+
+  void ex_setUniversalBg(Screen *sc, int bg) {
+    sc->setUniversalBg(bg);
+  }
+
+  // localPaletteInput must point to an array of exactly
+  // LOCAL_PALETTES_LENGTH elements. I don't check this here because
+  // FFIs are hard, but the python interface does check.
+  void ex_setLocalPalettes(Screen *sc, float *localPaletteInput) {
+    sc->setLocalPalettes(localPaletteInput);
+  }
+
+  void ex_setBgPatternTable(Screen *sc, float *ptab) {
+    sc->setBgPatternTable(ptab);
+  }
+
+  void ex_setSpritePatternTable(Screen *sc, float *ptab) {
+    sc->setSpritePatternTable(ptab);
+  }
+
+  void ex_setTileIndices(Screen *sc, unsigned char *indices) {
+    sc->setTileIndices(indices);
+  }
+
+  void ex_setPaletteIndices(Screen *sc, unsigned char *indices) {
+    sc->setPaletteIndices(indices);
+  }
+
+
+  void ex_drawToBuffer(Screen *sc) {
+    sc->drawToBuffer();
+  }
+
+  int ex_draw(Screen *sc) {
+    return sc->draw();
+  }
+
+}
+
+// boost.python interface
+
 // iterable_converter struct from
 // http://stackoverflow.com/questions/15842126/feeding-a-python-list-into-a-function-taking-in-a-vector-with-boost-python
 
@@ -599,12 +686,18 @@ BOOST_PYTHON_MODULE(libscreen) {
     ;
 
   class_<Screen>("Screen")
-    .def("drawToBuffer", &Screen::drawToBuffer)
-    .def("draw", &Screen::draw)
-    .def("setUniversalBg", &Screen::setUniversalBg)
-    .def("setLocalPalettes", &Screen::setLocalPalettes)
-    .def("setBgPatternTable", &Screen::setBgPatternTable)
-    .def("setTileIndices", &Screen::setTileIndices)
-    .def("setPaletteIndices", &Screen::setPaletteIndices)
+    .def("drawToBuffer", &Screen::drawToBuffer) // converted
+    .def("draw", &Screen::draw) // converted
+    .def("setUniversalBg", &Screen::setUniversalBg) // converted
+    .def("setLocalPalettes",
+	 static_cast<void (Screen::*)(vector<float>)> (&Screen::setLocalPalettes)) // converted
+    .def("setBgPatternTable",
+	 static_cast<void (Screen::*)(vector<float>)> (&Screen::setBgPatternTable)) // converted
+    .def("setTileIndices",
+	 static_cast<void (Screen::*)(vector<vector<unsigned char> >)>
+	 (&Screen::setTileIndices))
+    .def("setPaletteIndices",
+	 static_cast<void (Screen::*)(vector<vector<unsigned char> >)>
+	 (&Screen::setPaletteIndices))
     ;
 }

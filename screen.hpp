@@ -72,10 +72,15 @@ class Screen {
 
   void setUniversalBg(int);
   void setLocalPalettes(vector<float>);
+  void setLocalPalettes(float*);
   void setBgPatternTable(vector<float>);
+  void setBgPatternTable(float*);
   void setSpritePatternTable(vector<float>);
+  void setSpritePatternTable(float*);
   void setTileIndices(vector<vector<unsigned char> >);
+  void setTileIndices(unsigned char *);
   void setPaletteIndices(vector<vector<unsigned char> >);
+  void setPaletteIndices(unsigned char *);
 
   void testRenderLoop();
   void drawToBuffer();

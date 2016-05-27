@@ -5,15 +5,17 @@ have more separation?)
 
 """
 import ctypes
+from ctypes import CDLL, c_void_p, c_int, c_float
 import threading
 import time
+import sys
 
 import numpy as np
 
 import palette
 import ppu
 
-import libscreen
+# import libscreen
 
 PROGRAM_NAME = "Missingnes"
 
@@ -26,12 +28,15 @@ SCREEN_HEIGHT = ppu.VISIBLE_SCANLINES
 N_BG_VERTICES = TILE_ROWS * TILE_COLUMNS * 6
 
 PATTERN_TABLE_TILES = 256
+PATTERN_TABLE_ENTRIES = 8*8*PATTERN_TABLE_TILES
 
 # BG_PATTERN_TABLE_TEXTURE = GL_TEXTURE0
 # BG_PATTERN_TABLE_TEXID = 0
 # SPRITE_PATTERN_TABLE_TEXTURE = GL_TEXTURE1
 # SPRITE_PATTERN_TABLE_TEXID = 1
 # TODO other texture ids go here
+
+LOCAL_PALETTES_LENGTH = 16*4
 
 # number of values (elements) per vertex in the vertex buffer
 VERTEX_ELTS = 7
@@ -45,6 +50,91 @@ SECONDS_PER_FRAME = 1.0 / MAX_FPS
 
 # gain determining seconds per frame (as in a kalman filter)
 SPF_GAIN = 0.2
+
+def trace(func):
+    fname = func.func_name
+    def out(*args,**kwargs):
+        print >> sys.stderr, ("Entering %s" % fname)
+        val = func(*args,**kwargs)
+        print >> sys.stderr, ("Leaving %s" % fname)
+    return out
+
+class CScreen(object):
+    # Is this the best interface structure? Eh, it'll work.
+
+    def __init__(self):
+        libscreen = CDLL("libscreen.so")
+        libscreen.ex_constructScreen.restype = c_void_p
+
+        libscreen.ex_setUniversalBg.argtypes = [c_void_p, c_int]
+
+        libscreen.ex_drawToBuffer.argtypes = [c_void_p]
+
+        libscreen.ex_setLocalPalettes.argtypes = \
+        [c_void_p, (c_float * LOCAL_PALETTES_LENGTH)]
+
+        libscreen.ex_setBgPatternTable.argtypes = \
+        [c_void_p, (c_float * PATTERN_TABLE_ENTRIES)]
+
+        libscreen.ex_setSpritePatternTable.argtypes = \
+        [c_void_p, (c_float * PATTERN_TABLE_ENTRIES)]
+
+        libscreen.ex_setTileIndices.argtypes = \
+        [c_void_p, c_float * (TILE_ROWS * TILE_COLUMNS)]
+
+        libscreen.ex_setPaletteIndices.argtypes = \
+        [c_void_p, (c_float * TILE_ROWS) * TILE_COLUMNS]
+
+        libscreen.ex_draw.argtypes = [c_void_p]
+        libscreen.ex_draw.restype = c_int
+
+        self.libscreen = libscreen
+
+        self.screen_p = libscreen.ex_constructScreen()
+
+    def setUniversalBg(self, bg):
+        self.libscreen.ex_setUniversalBg(self.screen_p, bg)
+
+    def setLocalPalettes(self, paletteInput):
+        # This takes in a list and handles type conversion itself.
+        assert(len(paletteInput) == LOCAL_PALETTES_LENGTH)
+        c_paletteInput = (c_float * LOCAL_PALETTES_LENGTH) (*paletteInput)
+        self.libscreen.ex_setLocalPalettes(self.screen_p, c_paletteInput)
+
+    def setBgPatternTable(self, bgInput):
+        assert(len(bgInput) == PATTERN_TABLE_ENTRIES)
+        c_ptab = (c_float * PATTERN_TABLE_ENTRIES) (*bgInput)
+        self.libscreen.ex_setBgPatternTable(self.screen_p, c_ptab)
+
+    def setSpritePatternTable(self, spriteInput):
+        assert(len(spriteInput) == PATTERN_TABLE_ENTRIES)
+        c_ptab = (c_float * PATTERN_TABLE_ENTRIES) (*spriteInput)
+        self.libscreen.ex_setSpritePatternTable(self.screen_p, c_ptab)
+
+    def setTileIndices(self, indices):
+        assert(len(indices) == TILE_COLUMNS)
+        intermediate = []
+        for column in indices:
+            assert len(column) == TILE_ROWS
+            intermediate += column
+        c_indices = (c_float * (TILE_ROWS * TILE_COLUMNS)) (*intermediate)
+        self.libscreen.ex_setTileIndices(self.screen_p, c_indices)
+
+    def setPaletteIndices(self, indices):
+        assert(len(indices) == TILE_COLUMNS)
+        for column in indices:
+            assert len(column) == TILE_ROWS
+        intermediate = [(c_float * TILE_ROWS) (*column)
+                        for column in indices]
+        c_indices = ((c_float * TILE_ROWS) * TILE_COLUMNS) (*intermediate)
+        self.libscreen.ex_setPaletteIndices(self.screen_p, c_indices)
+
+    def drawToBuffer(self):
+        self.libscreen.ex_drawToBuffer(self.screen_p)
+
+    def draw(self):
+        return self.libscreen.ex_draw(self.screen_p)
+
 
 class Screen(object):
 
@@ -63,7 +153,8 @@ class Screen(object):
         self.fpsLastDisplayed = 0
         self.secondsPerFrame = None
 
-        self.cscreen = libscreen.Screen()
+        # self.cscreen = libscreen.Screen()
+        self.cscreen = CScreen()
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         self.draw_to_buffer()
@@ -73,8 +164,6 @@ class Screen(object):
 
         # time.sleep(1)
 
-        return
-
         # Handle controller input.
 
         #glfw.poll_events()
@@ -82,8 +171,8 @@ class Screen(object):
         # TODO: use fewer magic numbers and put together a proper
         # structure for this code.
 
-        # forgive me demeter for I have sinned
-        ips = self.ppu.cpu.controller.inputState.states
+        # # forgive me demeter for I have sinned
+        # ips = self.ppu.cpu.controller.inputState.states
 
         # ips[0] = self.pollKey(glfw.KEY_A) # A
         # ips[1] = self.pollKey(glfw.KEY_S) # B
@@ -96,26 +185,27 @@ class Screen(object):
 
         timenow = time.time()
 
-        # if self.secondsPerFrame is not None:
-        #     # this causes segafaults and I don't know why:
+        if self.secondsPerFrame is not None:
+            # this causes segfaults and I don't know why:
 
-        #     # if self.secondsPerFrame < SECONDS_PER_FRAME:
-        #     #     targetTime = timenow + SECONDS_PER_FRAME - self.secondsPerFrame
-        #     #     time.sleep(targetTime - timenow)
-        #     #     timenow = time.time()
-        #     observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
-        #     self.secondsPerFrame = (SPF_GAIN * observedSpf +
-        #                             (1 - SPF_GAIN) * self.secondsPerFrame)
-        # elif self.fpsLastUpdated is not None:
-        #     observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
-        #     self.secondsPerFrame = observedSpf
-        # self.fpsLastUpdated = frame
-        # self.fpsLastTime = timenow
-        # if timenow >= self.fpsLastDisplayed + FPS_UPDATE_INTERVAL:
-        #     if self.secondsPerFrame is not None:
-        #         glfw.set_window_title(self.window,
-        #                               "%s - (%d) %d FPS" % (PROGRAM_NAME, frame, 1.0/self.secondsPerFrame))
-        #     self.fpsLastDisplayed = timenow
+            # if self.secondsPerFrame < SECONDS_PER_FRAME:
+            #     targetTime = timenow + SECONDS_PER_FRAME - self.secondsPerFrame
+            #     time.sleep(targetTime - timenow)
+            #     timenow = time.time()
+            observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
+            self.secondsPerFrame = (SPF_GAIN * observedSpf +
+                                    (1 - SPF_GAIN) * self.secondsPerFrame)
+        elif self.fpsLastUpdated is not None:
+            observedSpf = (timenow - self.fpsLastTime) / (frame - self.fpsLastUpdated)
+            self.secondsPerFrame = observedSpf
+        self.fpsLastUpdated = frame
+        self.fpsLastTime = timenow
+        if timenow >= self.fpsLastDisplayed + FPS_UPDATE_INTERVAL:
+            if self.secondsPerFrame is not None:
+                print "Frame %d (%d FPS)" % (frame, 1.0 / self.secondsPerFrame)
+                # glfw.set_window_title(self.window,
+                #                       "%s - (%d) %d FPS" % (PROGRAM_NAME, frame, 1.0/self.secondsPerFrame))
+            self.fpsLastDisplayed = timenow
 
         # self.gpuStart.set()
 
