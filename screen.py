@@ -5,7 +5,7 @@ have more separation?)
 
 """
 import ctypes
-from ctypes import CDLL, c_void_p, c_int, c_float
+from ctypes import CDLL, c_void_p, c_int, c_float, c_ubyte
 import threading
 import time
 import sys
@@ -14,8 +14,6 @@ import numpy as np
 
 import palette
 import ppu
-
-# import libscreen
 
 PROGRAM_NAME = "Missingnes"
 
@@ -80,10 +78,10 @@ class CScreen(object):
         [c_void_p, (c_float * PATTERN_TABLE_ENTRIES)]
 
         libscreen.ex_setTileIndices.argtypes = \
-        [c_void_p, c_float * (TILE_ROWS * TILE_COLUMNS)]
+        [c_void_p, c_ubyte * (TILE_ROWS * TILE_COLUMNS)]
 
         libscreen.ex_setPaletteIndices.argtypes = \
-        [c_void_p, (c_float * TILE_ROWS) * TILE_COLUMNS]
+        [c_void_p, c_ubyte * (TILE_ROWS * TILE_COLUMNS)]
 
         libscreen.ex_draw.argtypes = [c_void_p]
         libscreen.ex_draw.restype = c_int
@@ -117,16 +115,16 @@ class CScreen(object):
         for column in indices:
             assert len(column) == TILE_ROWS
             intermediate += column
-        c_indices = (c_float * (TILE_ROWS * TILE_COLUMNS)) (*intermediate)
+        c_indices = (c_ubyte * (TILE_ROWS * TILE_COLUMNS)) (*intermediate)
         self.libscreen.ex_setTileIndices(self.screen_p, c_indices)
 
     def setPaletteIndices(self, indices):
         assert(len(indices) == TILE_COLUMNS)
+        intermediate = []
         for column in indices:
             assert len(column) == TILE_ROWS
-        intermediate = [(c_float * TILE_ROWS) (*column)
-                        for column in indices]
-        c_indices = ((c_float * TILE_ROWS) * TILE_COLUMNS) (*intermediate)
+            intermediate += column
+        c_indices = (c_ubyte * (TILE_ROWS * TILE_COLUMNS)) (*intermediate)
         self.libscreen.ex_setPaletteIndices(self.screen_p, c_indices)
 
     def drawToBuffer(self):
@@ -153,14 +151,15 @@ class Screen(object):
         self.fpsLastDisplayed = 0
         self.secondsPerFrame = None
 
-        # self.cscreen = libscreen.Screen()
         self.cscreen = CScreen()
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         self.draw_to_buffer()
 
         # TODO reinstate FPS-capping code
-        self.cscreen.draw()
+        drawval = self.cscreen.draw()
+        if drawval != 0:
+            sys.exit(0)
 
         # time.sleep(1)
 

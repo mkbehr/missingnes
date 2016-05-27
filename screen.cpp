@@ -115,14 +115,11 @@ Screen::Screen(void) {
   // indices, palette indices
 
   // There is a more c++ style way to get the array length here. Eh.
-  cerr << "Initializing local palettes\n";
   memset(localPalettes, 0, LOCAL_PALETTES_LENGTH * sizeof(float));
 
   // TODO also initialize sprite ptab
   vector<float> zeroPtab(PATTERN_TABLE_LENGTH, 0);
-  cerr << "Initializing background pattern table texture\n";
   setBgPatternTable(zeroPtab);
-  cerr << "Initializing sprite pattern table texture\n";
   setSpritePatternTable(zeroPtab);
 
   // set up state
@@ -166,7 +163,6 @@ void Screen::initShaders(void) {
   const char *vertSrc = vertStr.c_str();
   // TODO error-check and make sure the file isn't too big
   int vertSrcLen = (int) vertStr.length();
-  printf("Read vertex shader file with length %d\n", vertSrcLen);
   ifstream fragFile(FRAGMENT_SHADER_FILE);
   if (!fragFile) {
     cerr << "Couldn't open fragment shader file\n";
@@ -177,7 +173,6 @@ void Screen::initShaders(void) {
   string fragStr = fragBuffer.str();
   const char *fragSrc = fragStr.c_str();
   int fragSrcLen = (int) fragStr.length();
-  printf("Read fragment shader file with length %d\n", vertSrcLen);
 
 
   // compile shaders
@@ -201,9 +196,6 @@ void Screen::initShaders(void) {
       cerr << "Couldn't get log message\n";
     }
     die();
-  } else {
-    // DEBUG
-    cerr << "Vertex shader compiled\n";
   }
 
   GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -224,9 +216,6 @@ void Screen::initShaders(void) {
       cerr << "Couldn't get log message\n";
     }
     die();
-  } else {
-    // DEBUG
-    cerr << "Fragment shader compiled\n";
   }
 
   // link shader program
@@ -250,9 +239,6 @@ void Screen::initShaders(void) {
       cerr << "Couldn't get log message\n";
     }
     die();
-  } else {
-    // DEBUG
-    cerr << "Shader program linked\n";
   }
 
   glUseProgram(shader);
@@ -555,7 +541,7 @@ void Screen::testRenderLoop(void) {
 //   return 0;
 // }
 
-// ctypes interface (to replace boost.python)
+// ctypes interface
 
 extern "C" {
 
@@ -606,98 +592,4 @@ extern "C" {
     return sc->draw();
   }
 
-}
-
-// boost.python interface
-
-// iterable_converter struct from
-// http://stackoverflow.com/questions/15842126/feeding-a-python-list-into-a-function-taking-in-a-vector-with-boost-python
-
-/// @brief Type that allows for registration of conversions from
-///        python iterable types.
-struct iterable_converter
-{
-  /// @note Registers converter from a python interable type to the
-  ///       provided type.
-  template <typename Container>
-  iterable_converter&
-  from_python()
-  {
-    boost::python::converter::registry::push_back(
-      &iterable_converter::convertible,
-      &iterable_converter::construct<Container>,
-      boost::python::type_id<Container>());
-
-    // Support chaining.
-    return *this;
-  }
-
-  /// @brief Check if PyObject is iterable.
-  static void* convertible(PyObject* object)
-  {
-    return PyObject_GetIter(object) ? object : NULL;
-  }
-
-  /// @brief Convert iterable PyObject to C++ container type.
-  ///
-  /// Container Concept requirements:
-  ///
-  ///   * Container::value_type is CopyConstructable.
-  ///   * Container can be constructed and populated with two iterators.
-  ///     I.e. Container(begin, end)
-  template <typename Container>
-  static void construct(
-    PyObject* object,
-    boost::python::converter::rvalue_from_python_stage1_data* data)
-  {
-    namespace python = boost::python;
-    // Object is a borrowed reference, so create a handle indicting it is
-    // borrowed for proper reference counting.
-    python::handle<> handle(python::borrowed(object));
-
-    // Obtain a handle to the memory block that the converter has allocated
-    // for the C++ type.
-    typedef python::converter::rvalue_from_python_storage<Container>
-                                                                storage_type;
-    void* storage = reinterpret_cast<storage_type*>(data)->storage.bytes;
-
-    typedef python::stl_input_iterator<typename Container::value_type>
-                                                                    iterator;
-
-    // Allocate the C++ type into the converter's memory block, and assign
-    // its handle to the converter's convertible variable.  The C++
-    // container is populated by passing the begin and end iterators of
-    // the python object to the container's constructor.
-    new (storage) Container(
-      iterator(python::object(handle)), // begin
-      iterator());                      // end
-    data->convertible = storage;
-  }
-};
-
-using namespace boost::python;
-
-BOOST_PYTHON_MODULE(libscreen) {
-
-  iterable_converter()
-    .from_python<std::vector<float> >()
-    .from_python<std::vector<unsigned char> >()
-    .from_python<std::vector<std::vector<unsigned char> > >()
-    ;
-
-  class_<Screen>("Screen")
-    .def("drawToBuffer", &Screen::drawToBuffer) // converted
-    .def("draw", &Screen::draw) // converted
-    .def("setUniversalBg", &Screen::setUniversalBg) // converted
-    .def("setLocalPalettes",
-	 static_cast<void (Screen::*)(vector<float>)> (&Screen::setLocalPalettes)) // converted
-    .def("setBgPatternTable",
-	 static_cast<void (Screen::*)(vector<float>)> (&Screen::setBgPatternTable)) // converted
-    .def("setTileIndices",
-	 static_cast<void (Screen::*)(vector<vector<unsigned char> >)>
-	 (&Screen::setTileIndices))
-    .def("setPaletteIndices",
-	 static_cast<void (Screen::*)(vector<vector<unsigned char> >)>
-	 (&Screen::setPaletteIndices))
-    ;
 }
