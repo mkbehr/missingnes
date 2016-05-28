@@ -40,7 +40,7 @@ LOCAL_PALETTES_LENGTH = 16*4
 VERTEX_ELTS = 7
 
 DRAW_BG = True
-DRAW_SPRITES = False
+DRAW_SPRITES = True
 
 FPS_UPDATE_INTERVAL = 2.0 # in seconds
 MAX_FPS = 60
@@ -68,7 +68,10 @@ class CScreen(object):
 
         libscreen.ex_drawToBuffer.argtypes = [c_void_p]
 
-        libscreen.ex_setLocalPalettes.argtypes = \
+        libscreen.ex_setBgPalettes.argtypes = \
+        [c_void_p, (c_float * LOCAL_PALETTES_LENGTH)]
+
+        libscreen.ex_setSpritePalettes.argtypes = \
         [c_void_p, (c_float * LOCAL_PALETTES_LENGTH)]
 
         libscreen.ex_setBgPatternTable.argtypes = \
@@ -83,6 +86,9 @@ class CScreen(object):
         libscreen.ex_setPaletteIndices.argtypes = \
         [c_void_p, c_ubyte * (TILE_ROWS * TILE_COLUMNS)]
 
+        libscreen.ex_setOam.argtypes = \
+        [c_void_p, c_ubyte * ppu.OAM_SIZE]
+
         libscreen.ex_draw.argtypes = [c_void_p]
         libscreen.ex_draw.restype = c_int
 
@@ -93,11 +99,16 @@ class CScreen(object):
     def setUniversalBg(self, bg):
         self.libscreen.ex_setUniversalBg(self.screen_p, bg)
 
-    def setLocalPalettes(self, paletteInput):
+    def setBgPalettes(self, paletteInput):
         # This takes in a list and handles type conversion itself.
         assert(len(paletteInput) == LOCAL_PALETTES_LENGTH)
         c_paletteInput = (c_float * LOCAL_PALETTES_LENGTH) (*paletteInput)
-        self.libscreen.ex_setLocalPalettes(self.screen_p, c_paletteInput)
+        self.libscreen.ex_setBgPalettes(self.screen_p, c_paletteInput)
+
+    def setSpritePalettes(self, paletteInput):
+        assert(len(paletteInput) == LOCAL_PALETTES_LENGTH)
+        c_paletteInput = (c_float * LOCAL_PALETTES_LENGTH) (*paletteInput)
+        self.libscreen.ex_setSpritePalettes(self.screen_p, c_paletteInput)
 
     def setBgPatternTable(self, bgInput):
         assert(len(bgInput) == PATTERN_TABLE_ENTRIES)
@@ -126,6 +137,11 @@ class CScreen(object):
             intermediate += column
         c_indices = (c_ubyte * (TILE_ROWS * TILE_COLUMNS)) (*intermediate)
         self.libscreen.ex_setPaletteIndices(self.screen_p, c_indices)
+
+    def setOam(self, oamBytes):
+        assert(len(oamBytes) == ppu.OAM_SIZE)
+        c_oamBytes = (c_ubyte * ppu.OAM_SIZE) (*oamBytes)
+        self.libscreen.ex_setOam(self.screen_p, c_oamBytes)
 
     def drawToBuffer(self):
         self.libscreen.ex_drawToBuffer(self.screen_p)
@@ -213,179 +229,33 @@ class Screen(object):
         self.cscreen.setUniversalBg(self.ppu.universalBg)
 
         if DRAW_BG:
-
             self.maintainBgPatternTable()
-
             self.cscreen.setTileIndices(self.tileIndices)
             self.cscreen.setPaletteIndices(self.paletteIndices)
-
-            # Set tile and palette. The rest of the values in the VBO won't change.
-            for x in xrange(TILE_COLUMNS):
-                for y in xrange(TILE_ROWS):
-                    tile = self.tileIndices[x][y]
-                    palette_index = self.paletteIndices[x][y]
-                    screen_tile_index = (x + y*TILE_COLUMNS) * VERTEX_ELTS*6
-                    # for vertex_i in range(6):
-                    #     self.bgVertices[screen_tile_index + vertex_i*VERTEX_ELTS + 3] = tile
-                    #     self.bgVertices[screen_tile_index + vertex_i*VERTEX_ELTS + 6] = palette_index
-
-            # stride = VERTEX_ELTS * ctypes.sizeof(ctypes.c_ubyte)
-
-            # glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(self.bgVertices), self.bgVertices, GL_DYNAMIC_DRAW)
             localPaletteList = self.ppu.dumpLocalPalettes(ppu.BG_PALETTE_BASE)
-            self.cscreen.setLocalPalettes(localPaletteList)
-            # print self.paletteIndices
-            # localPaletteNums = [0 for i in range(16)]
-            # for i in range(16):
-            #     if (i % 4) == 0:
-            #         continue
-            #     localPaletteNums[i] = ord(self.ppu.cpu.mem.ppuRead(ppu.BG_PALETTE_BASE + i))
-            # print localPaletteNums
-            # print localPaletteList
-
-        self.cscreen.drawToBuffer()
-
+            self.cscreen.setBgPalettes(localPaletteList)
         ## Now do sprites.
         if DRAW_SPRITES:
-            # glBindBuffer(GL_ARRAY_BUFFER, self.spriteVbo)
-
-            # # as with the calls to these in the bg code, I don't know why
-            # # we need these but we do
-            # glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE)
-            # glBindTexture(GL_TEXTURE_2D, self.spritePtabName)
-
-            # self.maintainSpritePatternTable()
-
-            # glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            # glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-            # nSpriteVertices = 0
-            # spriteVertexList = []
-
-            # oam = self.ppu.oam
-            # for i in range(ppu.OAM_SIZE / ppu.OAM_ENTRY_SIZE):
-            #     # TODO deal with maximum sprites per scanline
-            #     baseindex = i * ppu.OAM_ENTRY_SIZE
-            #     spritetop = ord(oam[baseindex]) + 1
-            #     if spritetop >= 0xf0: # the sprite is wholly off the screen; ignore it
-            #         continue
-            #     # TODO account for 8x16 sprites
-
-            #     tile = ord(oam[baseindex+1])
-            #     attributes = ord(oam[baseindex+2])
-            #     spriteleft = ord(oam[baseindex+3])
-            #     palette_index = attributes & 0x3
-            #     horizontalMirror = bool(attributes & 0x40)
-            #     verticalMirror = bool(attributes & 0x80)
-
-            #     spritebottom = spritetop+8
-            #     spriteright = spriteleft+8
-
-            #     x_left = spriteleft
-            #     x_right = spriteright % 256
-            #     x_left_high = 0
-            #     x_right_high = spriteright / 256
-
-            #     y_top = SCREEN_HEIGHT - spritetop
-            #     y_bottom = SCREEN_HEIGHT - spritebottom
-
-            #     if horizontalMirror:
-            #         u_left = 1
-            #         u_right = 0
-            #     else:
-            #         u_left = 0
-            #         u_right = 1
-
-            #     if verticalMirror:
-            #         v_bottom = 0
-            #         v_top = 1
-            #     else:
-            #         v_bottom = 1
-            #         v_top = 0
-
-            #     spriteVertexList += [
-            #         # first triangle
-            #         x_left, y_bottom, x_left_high, tile, u_left, v_bottom, palette_index,
-            #         x_right, y_bottom, x_right_high, tile, u_right, v_bottom, palette_index,
-            #         x_right, y_top, x_right_high, tile, u_right, v_top, palette_index,
-            #         # second triangle
-            #         x_left, y_bottom, x_left_high, tile, u_left, v_bottom, palette_index,
-            #         x_right, y_top, x_right_high, tile, u_right, v_top, palette_index,
-            #         x_left, y_top, x_left_high, tile, u_left, v_top, palette_index,
-            #         ]
-            #     nSpriteVertices += 6
-            pass
-
-            # TODO: we can go a bit faster by not recreating this and just
-            # trusting our vertex count to prevent us from drawing garbage
-            # data
-            # spriteVertices = (ctypes.c_ubyte * len(spriteVertexList)) (*spriteVertexList)
-
-            # stride = VERTEX_ELTS * ctypes.sizeof(ctypes.c_ubyte)
-
-            # glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(self.bgVertices), spriteVertices, GL_DYNAMIC_DRAW)
-
-            # # Pointing attributes should work the same as with the bg
-            # # code. I'm not sure we even need to repeat this code. Only
-            # # difference is that the pattern table and palettes are
-            # # different.
-
-            # # point attributes into that big buffer
-            # xyOffset = ctypes.c_void_p(0)
-            # glVertexAttribPointer(self.xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride, xyOffset)
-            # glEnableVertexAttribArray(self.xyAttrib)
-            # xHighOffset = ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_ubyte))
-            # glVertexAttribPointer(self.xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride, xHighOffset)
-            # glEnableVertexAttribArray(self.xHighAttrib)
-            # tuvOffset = ctypes.c_void_p(3 * ctypes.sizeof(ctypes.c_ubyte))
-            # glVertexAttribPointer(self.tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride, tuvOffset)
-            # glEnableVertexAttribArray(self.tuvAttrib)
-            # paletteNOffset = ctypes.c_void_p(6 * ctypes.sizeof(ctypes.c_ubyte))
-            # glVertexAttribIPointer(self.paletteNAttrib, 1, GL_UNSIGNED_BYTE, stride, paletteNOffset)
-            # glEnableVertexAttribArray(self.paletteNAttrib)
-
-            # # point uniform arguments
-            # glUniform1i(glGetUniformLocation(self.shader, "patternTable"), SPRITE_PATTERN_TABLE_TEXID)
-
-            # # and localPalettes.
-            # localPaletteList = self.ppu.dumpLocalPalettes(ppu.SPRITE_PALETTE_BASE)
-            # localPaletteCArray = (ctypes.c_float * len(localPaletteList)) (*localPaletteList)
-            # glUniform4fv(glGetUniformLocation(self.shader, "localPalettes"), 16, localPaletteCArray)
-
-            # # And now we can draw and hope for the best.
-            # glDrawArrays(GL_TRIANGLES, 0, nSpriteVertices)
-
-        # Don't swap buffers here; wait until we've had a chance to sleep in order to cap FPS
-
-        # glfw.swap_buffers(self.window)
+            self.maintainSpritePatternTable()
+            localPaletteList = self.ppu.dumpLocalPalettes(ppu.SPRITE_PALETTE_BASE)
+            self.cscreen.setSpritePalettes(localPaletteList)
+            self.cscreen.setOam([ord(x) for x in self.ppu.oam])
+        self.cscreen.drawToBuffer()
 
     def maintainBgPatternTable(self):
         if self.lastBgPattern != self.ppu.bgPatternTableAddr:
-
-            self.patternTable = self.ppu.dumpPtab(self.ppu.bgPatternTableAddr)
+            self.bgPatternTable = self.ppu.dumpPtab(self.ppu.bgPatternTableAddr)
             # # I can't make GL_R8UI work, so everything has to be floats
-            patternTableFloats = [float(ord(x)) for x in self.patternTable]
-            self.cscreen.setBgPatternTable(patternTableFloats);
-
-            # textureData = (ctypes.c_float * len(patternTableFloats)) (*patternTableFloats)
-            # glBindTexture(GL_TEXTURE_2D, self.bgPtabName)
-            # glActiveTexture(BG_PATTERN_TABLE_TEXTURE)
-            # glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*256, 8,
-            #              0, GL_RED, GL_FLOAT, textureData)
-            # self.lastBgPattern = self.ppu.bgPatternTableAddr
+            patternTableFloats = [float(ord(x)) for x in self.bgPatternTable]
+            self.cscreen.setBgPatternTable(patternTableFloats)
+            self.lastBgPattern = self.ppu.bgPatternTableAddr
 
     def maintainSpritePatternTable(self):
-        # I think this wants self.spriteVbo to be bound to GL_ARRAY_BUFFER
         if self.lastSpritePattern != self.ppu.spritePatternTableAddr:
-
-            self.patternTable = self.ppu.dumpPtab(self.ppu.spritePatternTableAddr)
+            self.spritePatternTable = self.ppu.dumpPtab(self.ppu.spritePatternTableAddr)
             # I can't make GL_R8UI work, so everything has to be floats
-            patternTableFloats = [float(ord(x)) for x in self.patternTable]
-            textureData = (ctypes.c_float * len(patternTableFloats)) (*patternTableFloats)
-            glBindTexture(GL_TEXTURE_2D, self.spritePtabName)
-            glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*256, 8,
-                         0, GL_RED, GL_FLOAT, textureData)
+            patternTableFloats = [float(ord(x)) for x in self.spritePatternTable]
+            self.cscreen.setSpritePatternTable(patternTableFloats)
             self.lastSpritePattern = self.ppu.spritePatternTableAddr
 
     def pollKey(self, key):

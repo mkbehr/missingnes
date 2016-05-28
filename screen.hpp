@@ -7,7 +7,7 @@
 // defining GLFW_INCLUDE_GLEXT may also be useful in the future
 #include <GLFW/glfw3.h>
 
-struct bgVertex {
+struct glVertex {
   unsigned char x_low;
   unsigned char y;
   unsigned char x_high;
@@ -17,7 +17,30 @@ struct bgVertex {
   unsigned char palette;
 };
 // this may not be necessary now that we can just define a struct
-const int VERTEX_ELTS = sizeof(struct bgVertex);
+const int VERTEX_ELTS = sizeof(struct glVertex);
+static_assert(sizeof(struct glVertex) == 7, "glVertex struct has wrong size");
+
+struct oamEntry {
+  unsigned char y_minus_one;
+  unsigned char tile;
+  unsigned char attributes;
+  unsigned char x;
+};
+
+static_assert(sizeof(struct oamEntry) == 4, "oamEntry struct has wrong size");
+
+// Bitmasks for the attribute byte. I'd love to use a bitfield here
+// instead, but bitfield ordering is implementation-specific and I
+// don't want to tempt fate.
+const unsigned char OAM_PALETTE = 0x3;
+// bits 2-4 are unused
+const unsigned char OAM_PRIORITY = 0x20;
+const unsigned char OAM_FLIP_HORIZONTAL = 0x40;
+const unsigned char OAM_FLIP_VERTICAL = 0x80;
+
+const int OAM_ENTRIES = 64;
+const int OAM_SIZE = 256;
+static_assert(OAM_SIZE == OAM_ENTRIES * sizeof(struct oamEntry), "OAM size is wrong");
 
 const char *PROGRAM_NAME = "Missingnes";
 
@@ -52,7 +75,7 @@ const int SPRITE_PATTERN_TABLE_TEXID = 1;
 // TODO other texture ids go here
 
 const int DRAW_BG = 1;
-const int DRAW_SPRITES = 0;
+const int DRAW_SPRITES = 1;
 
 const int LOCAL_PALETTES_LENGTH = 16*4;
 
@@ -68,16 +91,19 @@ class Screen {
   Screen();
 
   void setUniversalBg(int);
-  void setLocalPalettes(vector<float>);
-  void setLocalPalettes(float*);
+  void setBgPalettes(vector<float>);
+  void setBgPalettes(float*);
   void setBgPatternTable(vector<float>);
   void setBgPatternTable(float*);
+  void setSpritePalettes(vector<float>);
+  void setSpritePalettes(float*);
   void setSpritePatternTable(vector<float>);
   void setSpritePatternTable(float*);
   void setTileIndices(vector<vector<unsigned char> >);
   void setTileIndices(unsigned char *);
   void setPaletteIndices(vector<vector<unsigned char> >);
   void setPaletteIndices(unsigned char *);
+  void setOam(unsigned char *);
 
   void testRenderLoop();
   void drawToBuffer();
@@ -108,11 +134,17 @@ class Screen {
   vector<vector<unsigned char> > tileIndices;
   vector<vector<unsigned char> > paletteIndices;
 
-  struct bgVertex bgVertices[N_BG_VERTICES];
+  struct glVertex bgVertices[N_BG_VERTICES];
 
-  float localPalettes[LOCAL_PALETTES_LENGTH];
+  float bgPalettes[LOCAL_PALETTES_LENGTH];
 
   int universalBg;
+
+  struct oamEntry oam[OAM_ENTRIES];
+
+  vector<struct glVertex> spriteVertices;
+
+  float spritePalettes[LOCAL_PALETTES_LENGTH];
 
   // methods
 

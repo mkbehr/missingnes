@@ -114,10 +114,11 @@ Screen::Screen(void) {
   // things to zero-initialize: local palettes, pattern tables, tile
   // indices, palette indices
 
-  // There is a more c++ style way to get the array length here. Eh.
-  memset(localPalettes, 0, LOCAL_PALETTES_LENGTH * sizeof(float));
+  // There is a more c++ style way to get the array lengths here. Eh.
+  memset(bgPalettes, 0, LOCAL_PALETTES_LENGTH * sizeof(float));
+  memset(spritePalettes, 0, LOCAL_PALETTES_LENGTH * sizeof(float));
+  memset(oam, 0, OAM_SIZE);
 
-  // TODO also initialize sprite ptab
   vector<float> zeroPtab(PATTERN_TABLE_LENGTH, 0);
   setBgPatternTable(zeroPtab);
   setSpritePatternTable(zeroPtab);
@@ -135,6 +136,8 @@ Screen::Screen(void) {
   }
 
   setUniversalBg(0);
+
+  spriteVertices.reserve(OAM_ENTRIES * 6);
 }
 
 GLint safeGetAttribLocation(GLuint program, const GLchar *name) {
@@ -270,16 +273,16 @@ void Screen::initBgVertices(void) {
       int vertex_index =
 	(x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
 
-      struct bgVertex bottomLeft =
+      struct glVertex bottomLeft =
 	{x_left, y_bottom, x_left_high,
 	 tile, u_left, v_bottom, palette_index};
-      struct bgVertex bottomRight =
+      struct glVertex bottomRight =
 	{x_right, y_bottom, x_right_high,
 	 tile, u_right, v_bottom, palette_index};
-      struct bgVertex topLeft =
+      struct glVertex topLeft =
 	{x_left, y_top, x_left_high,
 	 tile, u_left, v_top, palette_index};
-      struct bgVertex topRight =
+      struct glVertex topRight =
 	{x_right, y_top, x_right_high,
 	 tile, u_right, v_top, palette_index};
 
@@ -302,15 +305,27 @@ void Screen::setUniversalBg(int bg) {
   universalBg = bg;
 }
 
-void Screen::setLocalPalettes(vector<float> localPaletteInput) {
+void Screen::setBgPalettes(vector<float> localPaletteInput) {
   assert(localPaletteInput.size() == LOCAL_PALETTES_LENGTH);
-  memcpy(localPalettes, localPaletteInput.data(),
+  memcpy(bgPalettes, localPaletteInput.data(),
 	 LOCAL_PALETTES_LENGTH * sizeof(float));
 }
 
 // Assumes that the input is exactly LOCAL_PALETTES_LENGTH long
-void Screen::setLocalPalettes(float *localPaletteInput) {
-  memcpy(localPalettes, localPaletteInput,
+void Screen::setBgPalettes(float *localPaletteInput) {
+  memcpy(bgPalettes, localPaletteInput,
+	 LOCAL_PALETTES_LENGTH * sizeof(float));
+}
+
+void Screen::setSpritePalettes(vector<float> localPaletteInput) {
+  assert(localPaletteInput.size() == LOCAL_PALETTES_LENGTH);
+  memcpy(spritePalettes, localPaletteInput.data(),
+	 LOCAL_PALETTES_LENGTH * sizeof(float));
+}
+
+// Assumes that the input is exactly LOCAL_PALETTES_LENGTH long
+void Screen::setSpritePalettes(float *localPaletteInput) {
+  memcpy(spritePalettes, localPaletteInput,
 	 LOCAL_PALETTES_LENGTH * sizeof(float));
 }
 
@@ -348,8 +363,9 @@ void Screen::setPaletteIndices(unsigned char *indices) {
 
 // assume the size is equal to 8*8*PATTERN_TABLE_TILES (TODO fix magic number)
 void Screen::setBgPatternTable(float *bgPtabInput) {
-  glBindTexture(GL_TEXTURE_2D, bgPtabName);
+  glBindBuffer(GL_ARRAY_BUFFER, bgVbo);
   glActiveTexture(BG_PATTERN_TABLE_TEXTURE);
+  glBindTexture(GL_TEXTURE_2D, bgPtabName);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
 	       0, GL_RED, GL_FLOAT, bgPtabInput);
   checkGlErrors(0);
@@ -370,8 +386,9 @@ void Screen::setBgPatternTable(vector<float> bgPtabInput) {
 }
 
 void Screen::setSpritePatternTable(float *spritePtabInput) {
-  glBindTexture(GL_TEXTURE_2D, spritePtabName);
+  glBindBuffer(GL_ARRAY_BUFFER, spriteVbo);
   glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE);
+  glBindTexture(GL_TEXTURE_2D, spritePtabName);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
 	       0, GL_RED, GL_FLOAT, spritePtabInput);
   checkGlErrors(0);
@@ -382,14 +399,26 @@ void Screen::setSpritePatternTable(vector<float> spritePtabInput) {
   setSpritePatternTable(spritePtabInput.data());
 }
 
+void Screen::setOam(unsigned char *oamBytes) {
+  // Not bothering to write the struct interface, because we'll only
+  // actually use this by taking byte-array input from the NES.
+  memcpy(oam, oamBytes, OAM_SIZE);
+}
+
 
 void Screen::drawToBuffer() {
-  // State we need by the time we finish this (for background):
+  // State we need by the time we finish this:
+  // For all:
   // - universalBg needs to be set to the universal background palette index
-  // - localPalettes needs to be set to a buffer with the local palettes
+  // For background:
+  // - bgPalettes needs to be set to a buffer with the local palettes
   // - BG_PATTERN_TABLE_TEXTURE needs to be populated with the background pattern table
   // - we need data for the actual tiles (tileIndices and paletteIndices from the python, set by the ppu)
   //   (so maybe keep the ppu setting that, and then move it from python to c++)
+  // For sprites:
+  // - spritePalettes needs to be set to a buffer with the local palettes
+  // - SPRITE_PATTERN_TABLE_TEXTURE needs to be poulated with the sprite pattern table
+  // - oam needs to be set to the OAM contents
 
   assert(universalBg < N_PALETTES);
   unsigned char *bgPalette = PALETTE[universalBg];
@@ -410,7 +439,6 @@ void Screen::drawToBuffer() {
     // don't understand why. The order is important for some reason.
     glActiveTexture(BG_PATTERN_TABLE_TEXTURE);
     glBindTexture(GL_TEXTURE_2D, bgPtabName);
-    // TODO maintain bg palette table (or, uh, make sure it's maintained)
 
     // do we need to call these again? unclear. python code did it but
     // I don't know why.
@@ -432,24 +460,24 @@ void Screen::drawToBuffer() {
       }
     }
 
-    int stride = sizeof(struct bgVertex);
-    glBufferData(GL_ARRAY_BUFFER, N_BG_VERTICES * sizeof(bgVertex),
+    int stride = sizeof(struct glVertex);
+    glBufferData(GL_ARRAY_BUFFER, N_BG_VERTICES * sizeof(struct glVertex),
 		 bgVertices, GL_DYNAMIC_DRAW);
     checkGlErrors(0);
     glVertexAttribPointer(xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct bgVertex, x_low));
+			  (const GLvoid *) offsetof(struct glVertex, x_low));
     glEnableVertexAttribArray(xyAttrib);
     checkGlErrors(0);
     glVertexAttribPointer(xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct bgVertex, x_high));
+			  (const GLvoid *) offsetof(struct glVertex, x_high));
     glEnableVertexAttribArray(xHighAttrib);
     checkGlErrors(0);
     glVertexAttribPointer(tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct bgVertex, tile));
+			  (const GLvoid *) offsetof(struct glVertex, tile));
     glEnableVertexAttribArray(tuvAttrib);
     checkGlErrors(0);
     glVertexAttribPointer(paletteNAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct bgVertex, palette));
+			  (const GLvoid *) offsetof(struct glVertex, palette));
     glEnableVertexAttribArray(paletteNAttrib);
     checkGlErrors(0);
 
@@ -459,14 +487,111 @@ void Screen::drawToBuffer() {
 
     // FIXME magic number 16
     glUniform4fv(glGetUniformLocation(shader, "localPalettes"), 16,
-		 localPalettes);
+		 bgPalettes);
     checkGlErrors(0);
 
     glDrawArrays(GL_TRIANGLES, 0, N_BG_VERTICES);
     checkGlErrors(0);
   }
   if (DRAW_SPRITES) {
-    ; // TODO
+    glBindBuffer(GL_ARRAY_BUFFER, spriteVbo);
+
+    glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE);
+    glBindTexture(GL_TEXTURE_2D, spritePtabName);
+
+    // still don't remember why/whether these glTexParameteri calls
+    // are necessary
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    spriteVertices.resize(0);
+
+    for (int oam_i = 0; oam_i < OAM_ENTRIES; oam_i++) {
+      // TODO deal with maximum sprites per scanline
+      struct oamEntry sprite = oam[oam_i];
+      if (sprite.y_minus_one >= 0xef) {
+	  // The sprite is wholly off the screen; ignore it
+	  continue;
+	}
+      // preceding check ensures this won't overflow
+      unsigned char spritetop = sprite.y_minus_one + 1;
+
+      unsigned char x_left = sprite.x;
+      unsigned char x_left_high = 0;
+      unsigned char x_right = sprite.x + 8;
+      unsigned char x_right_high = (x_right < 8 ? 1 : 0);
+
+      unsigned char y_top = SCREEN_HEIGHT - sprite.y_minus_one - 1;
+      unsigned char y_bottom = y_top - 8;
+
+      unsigned char u_left =
+	(sprite.attributes & OAM_FLIP_HORIZONTAL ? 1 : 0);
+      unsigned char u_right = 1 - u_left;
+
+      unsigned char v_top =
+	(sprite.attributes & OAM_FLIP_VERTICAL ? 1 : 0);
+      unsigned char v_bottom = 1 - v_top;
+
+      unsigned char tile = sprite.tile;
+      unsigned char palette_index = (sprite.attributes & OAM_PALETTE);
+
+      struct glVertex bottomLeft =
+	{x_left, y_bottom, x_left_high,
+	 tile, u_left, v_bottom, palette_index};
+      struct glVertex bottomRight =
+	{x_right, y_bottom, x_right_high,
+	 tile, u_right, v_bottom, palette_index};
+      struct glVertex topLeft =
+	{x_left, y_top, x_left_high,
+	 tile, u_left, v_top, palette_index};
+      struct glVertex topRight =
+	{x_right, y_top, x_right_high,
+	 tile, u_right, v_top, palette_index};
+
+      // first triangle
+      spriteVertices.push_back(bottomLeft);
+      spriteVertices.push_back(bottomRight);
+      spriteVertices.push_back(topRight);
+      // second triangle
+      spriteVertices.push_back(bottomLeft);
+      spriteVertices.push_back(topRight);
+      spriteVertices.push_back(topLeft);
+    }
+    // Not sure whether or not this code all needs to be repeated -
+    // it's mostly the same as the bg code. Only differences are
+    // pattern table, palettes, and number of vertices drawn.
+    int stride = sizeof(struct glVertex);
+    glBufferData(GL_ARRAY_BUFFER, spriteVertices.size() * sizeof(struct glVertex),
+		 spriteVertices.data(), GL_DYNAMIC_DRAW);
+    checkGlErrors(0);
+    glVertexAttribPointer(xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+			  (const GLvoid *) offsetof(struct glVertex, x_low));
+    glEnableVertexAttribArray(xyAttrib);
+    checkGlErrors(0);
+    glVertexAttribPointer(xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+			  (const GLvoid *) offsetof(struct glVertex, x_high));
+    glEnableVertexAttribArray(xHighAttrib);
+    checkGlErrors(0);
+    glVertexAttribPointer(tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+			  (const GLvoid *) offsetof(struct glVertex, tile));
+    glEnableVertexAttribArray(tuvAttrib);
+    checkGlErrors(0);
+    glVertexAttribPointer(paletteNAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+			  (const GLvoid *) offsetof(struct glVertex, palette));
+    glEnableVertexAttribArray(paletteNAttrib);
+    checkGlErrors(0);
+
+    glUniform1i(glGetUniformLocation(shader, "patternTable"),
+		SPRITE_PATTERN_TABLE_TEXID);
+    checkGlErrors(0);
+
+    // FIXME magic number 16
+    glUniform4fv(glGetUniformLocation(shader, "localPalettes"), 16,
+		 spritePalettes);
+    checkGlErrors(0);
+
+    glDrawArrays(GL_TRIANGLES, 0, spriteVertices.size());
+    checkGlErrors(0);
   }
 }
 
@@ -533,27 +658,12 @@ void Screen::testRenderLoop(void) {
   glfwTerminate();
 }
 
-// int main(void) {
-//   Screen foo = Screen();
-//   cerr << "Beginning render loop\n";
-//   foo.testRenderLoop();
-//   glfwTerminate();
-//   return 0;
-// }
-
 // ctypes interface
 
 extern "C" {
 
   Screen *ex_constructScreen(void) {
     return new Screen();
-  }
-
-  void ex_dumbTest(void) {
-    Screen *foo = new Screen();
-    foo->setUniversalBg(3);
-    foo->drawToBuffer();
-    foo->draw();
   }
 
   void ex_setUniversalBg(Screen *sc, int bg) {
@@ -563,8 +673,12 @@ extern "C" {
   // localPaletteInput must point to an array of exactly
   // LOCAL_PALETTES_LENGTH elements. I don't check this here because
   // FFIs are hard, but the python interface does check.
-  void ex_setLocalPalettes(Screen *sc, float *localPaletteInput) {
-    sc->setLocalPalettes(localPaletteInput);
+  void ex_setBgPalettes(Screen *sc, float *localPaletteInput) {
+    sc->setBgPalettes(localPaletteInput);
+  }
+
+  void ex_setSpritePalettes(Screen *sc, float *localPaletteInput) {
+    sc->setSpritePalettes(localPaletteInput);
   }
 
   void ex_setBgPatternTable(Screen *sc, float *ptab) {
@@ -583,6 +697,9 @@ extern "C" {
     sc->setPaletteIndices(indices);
   }
 
+  void ex_setOam(Screen *sc, unsigned char *oamBytes) {
+    sc->setOam(oamBytes);
+  }
 
   void ex_drawToBuffer(Screen *sc) {
     sc->drawToBuffer();
