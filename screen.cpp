@@ -43,13 +43,13 @@ const char *glErrorString(GLenum err) {
 }
 
 void _checkGlErrors(int continue_after_err,
-		    const char *errloc) {
+                    const char *errloc) {
   GLenum err = GL_NO_ERROR;
   while ((err = glGetError()) != GL_NO_ERROR) {
     const char *errMsg = glErrorString(err);
     cerr << errloc
-	 << ": GL error: " << errMsg
-	 << " (" << hex << err << ")\n";
+         << ": GL error: " << errMsg
+         << " (" << hex << err << ")\n";
     if (!continue_after_err) {
       die();
     }
@@ -271,20 +271,20 @@ void Screen::initBgVertices(void) {
       unsigned char palette_index = 0; // this will change
 
       int vertex_index =
-	(x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
+        (x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
 
       struct glVertex bottomLeft =
-	{x_left, y_bottom, x_left_high,
-	 tile, u_left, v_bottom, palette_index};
+        {x_left, y_bottom, x_left_high,
+         tile, u_left, v_bottom, palette_index};
       struct glVertex bottomRight =
-	{x_right, y_bottom, x_right_high,
-	 tile, u_right, v_bottom, palette_index};
+        {x_right, y_bottom, x_right_high,
+         tile, u_right, v_bottom, palette_index};
       struct glVertex topLeft =
-	{x_left, y_top, x_left_high,
-	 tile, u_left, v_top, palette_index};
+        {x_left, y_top, x_left_high,
+         tile, u_left, v_top, palette_index};
       struct glVertex topRight =
-	{x_right, y_top, x_right_high,
-	 tile, u_right, v_top, palette_index};
+        {x_right, y_top, x_right_high,
+         tile, u_right, v_top, palette_index};
 
       // represent square as two triangles
       // first triangle
@@ -308,25 +308,25 @@ void Screen::setUniversalBg(int bg) {
 void Screen::setBgPalettes(vector<float> localPaletteInput) {
   assert(localPaletteInput.size() == LOCAL_PALETTES_LENGTH);
   memcpy(bgPalettes, localPaletteInput.data(),
-	 LOCAL_PALETTES_LENGTH * sizeof(float));
+         LOCAL_PALETTES_LENGTH * sizeof(float));
 }
 
 // Assumes that the input is exactly LOCAL_PALETTES_LENGTH long
 void Screen::setBgPalettes(float *localPaletteInput) {
   memcpy(bgPalettes, localPaletteInput,
-	 LOCAL_PALETTES_LENGTH * sizeof(float));
+         LOCAL_PALETTES_LENGTH * sizeof(float));
 }
 
 void Screen::setSpritePalettes(vector<float> localPaletteInput) {
   assert(localPaletteInput.size() == LOCAL_PALETTES_LENGTH);
   memcpy(spritePalettes, localPaletteInput.data(),
-	 LOCAL_PALETTES_LENGTH * sizeof(float));
+         LOCAL_PALETTES_LENGTH * sizeof(float));
 }
 
 // Assumes that the input is exactly LOCAL_PALETTES_LENGTH long
 void Screen::setSpritePalettes(float *localPaletteInput) {
   memcpy(spritePalettes, localPaletteInput,
-	 LOCAL_PALETTES_LENGTH * sizeof(float));
+         LOCAL_PALETTES_LENGTH * sizeof(float));
 }
 
 void Screen::setTileIndices(vector<vector<unsigned char> > tiles) {
@@ -367,7 +367,7 @@ void Screen::setBgPatternTable(float *bgPtabInput) {
   glActiveTexture(BG_PATTERN_TABLE_TEXTURE);
   glBindTexture(GL_TEXTURE_2D, bgPtabName);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
-	       0, GL_RED, GL_FLOAT, bgPtabInput);
+               0, GL_RED, GL_FLOAT, bgPtabInput);
   checkGlErrors(0);
 }
 
@@ -390,7 +390,7 @@ void Screen::setSpritePatternTable(float *spritePtabInput) {
   glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE);
   glBindTexture(GL_TEXTURE_2D, spritePtabName);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8*PATTERN_TABLE_TILES, 8,
-	       0, GL_RED, GL_FLOAT, spritePtabInput);
+               0, GL_RED, GL_FLOAT, spritePtabInput);
   checkGlErrors(0);
 }
 
@@ -423,9 +423,9 @@ void Screen::drawToBuffer() {
   assert(universalBg < N_PALETTES);
   unsigned char *bgPalette = PALETTE[universalBg];
   glClearColor(((float) bgPalette[0]) / 255.0,
-	       ((float) bgPalette[1]) / 255.0,
-	       ((float) bgPalette[2]) / 255.0,
-	       1.0);
+               ((float) bgPalette[1]) / 255.0,
+               ((float) bgPalette[2]) / 255.0,
+               1.0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -450,44 +450,44 @@ void Screen::drawToBuffer() {
     // Set tile and palette. The rest of the values in the VBO won't change.
     for (int x = 0; x < TILE_COLUMNS; x++) {
       for (int y = 0; y < TILE_ROWS; y++) {
-	unsigned char tile = tileIndices[x][y];
-	unsigned char palette = paletteIndices[x][y];
-	int screen_tile_index = (x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
-	for (int vertex_i = 0; vertex_i < VERTICES_PER_TILE; vertex_i++) {
-	  bgVertices[screen_tile_index + vertex_i].tile = tile;
-	  bgVertices[screen_tile_index + vertex_i].palette = palette;
-	}
+        unsigned char tile = tileIndices[x][y];
+        unsigned char palette = paletteIndices[x][y];
+        int screen_tile_index = (x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
+        for (int vertex_i = 0; vertex_i < VERTICES_PER_TILE; vertex_i++) {
+          bgVertices[screen_tile_index + vertex_i].tile = tile;
+          bgVertices[screen_tile_index + vertex_i].palette = palette;
+        }
       }
     }
 
     int stride = sizeof(struct glVertex);
     glBufferData(GL_ARRAY_BUFFER, N_BG_VERTICES * sizeof(struct glVertex),
-		 bgVertices, GL_DYNAMIC_DRAW);
+                 bgVertices, GL_DYNAMIC_DRAW);
     checkGlErrors(0);
     glVertexAttribPointer(xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct glVertex, x_low));
+                          (const GLvoid *) offsetof(struct glVertex, x_low));
     glEnableVertexAttribArray(xyAttrib);
     checkGlErrors(0);
     glVertexAttribPointer(xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct glVertex, x_high));
+                          (const GLvoid *) offsetof(struct glVertex, x_high));
     glEnableVertexAttribArray(xHighAttrib);
     checkGlErrors(0);
     glVertexAttribPointer(tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct glVertex, tile));
+                          (const GLvoid *) offsetof(struct glVertex, tile));
     glEnableVertexAttribArray(tuvAttrib);
     checkGlErrors(0);
     glVertexAttribPointer(paletteNAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct glVertex, palette));
+                          (const GLvoid *) offsetof(struct glVertex, palette));
     glEnableVertexAttribArray(paletteNAttrib);
     checkGlErrors(0);
 
     glUniform1i(glGetUniformLocation(shader, "patternTable"),
-		BG_PATTERN_TABLE_TEXID);
+                BG_PATTERN_TABLE_TEXID);
     checkGlErrors(0);
 
     // FIXME magic number 16
     glUniform4fv(glGetUniformLocation(shader, "localPalettes"), 16,
-		 bgPalettes);
+                 bgPalettes);
     checkGlErrors(0);
 
     glDrawArrays(GL_TRIANGLES, 0, N_BG_VERTICES);
@@ -510,9 +510,9 @@ void Screen::drawToBuffer() {
       // TODO deal with maximum sprites per scanline
       struct oamEntry sprite = oam[oam_i];
       if (sprite.y_minus_one >= 0xef) {
-	  // The sprite is wholly off the screen; ignore it
-	  continue;
-	}
+          // The sprite is wholly off the screen; ignore it
+          continue;
+        }
       // preceding check ensures this won't overflow
       unsigned char spritetop = sprite.y_minus_one + 1;
 
@@ -525,11 +525,11 @@ void Screen::drawToBuffer() {
       unsigned char y_bottom = y_top - 8;
 
       unsigned char u_left =
-	(sprite.attributes & OAM_FLIP_HORIZONTAL ? 1 : 0);
+        (sprite.attributes & OAM_FLIP_HORIZONTAL ? 1 : 0);
       unsigned char u_right = 1 - u_left;
 
       unsigned char v_top =
-	(sprite.attributes & OAM_FLIP_VERTICAL ? 1 : 0);
+        (sprite.attributes & OAM_FLIP_VERTICAL ? 1 : 0);
       unsigned char v_bottom = 1 - v_top;
 
       unsigned char tile = sprite.tile;
@@ -547,9 +547,9 @@ void Screen::drawToBuffer() {
 	  int is_head_front = (tile % 4);
 	  // Stretch front head to the right and back head to the
 	  // left, unless it's horizontally mirrored.
-	  if ((!!is_head_front) != (!!(sprite.attributes & OAM_FLIP_HORIZONTAL))) {
-	    x_right += DONKEY_KONG_BIG_HEAD_INCREASE;
-	    x_right_high = (x_right < (DONKEY_KONG_BIG_HEAD_INCREASE + 8) ? 1 : 0);
+          if ((!!is_head_front) != (!!(sprite.attributes & OAM_FLIP_HORIZONTAL))) {
+            x_right += DONKEY_KONG_BIG_HEAD_INCREASE;
+            x_right_high = (x_right < (DONKEY_KONG_BIG_HEAD_INCREASE + 8) ? 1 : 0);
 	  } else {
 	    if (x_left <= DONKEY_KONG_BIG_HEAD_INCREASE) {
 	      x_left = 0;
@@ -561,17 +561,17 @@ void Screen::drawToBuffer() {
       }
 
       struct glVertex bottomLeft =
-	{x_left, y_bottom, x_left_high,
-	 tile, u_left, v_bottom, palette_index};
+        {x_left, y_bottom, x_left_high,
+         tile, u_left, v_bottom, palette_index};
       struct glVertex bottomRight =
-	{x_right, y_bottom, x_right_high,
-	 tile, u_right, v_bottom, palette_index};
+        {x_right, y_bottom, x_right_high,
+         tile, u_right, v_bottom, palette_index};
       struct glVertex topLeft =
-	{x_left, y_top, x_left_high,
-	 tile, u_left, v_top, palette_index};
+        {x_left, y_top, x_left_high,
+         tile, u_left, v_top, palette_index};
       struct glVertex topRight =
-	{x_right, y_top, x_right_high,
-	 tile, u_right, v_top, palette_index};
+        {x_right, y_top, x_right_high,
+         tile, u_right, v_top, palette_index};
 
       // first triangle
       spriteVertices.push_back(bottomLeft);
@@ -587,32 +587,32 @@ void Screen::drawToBuffer() {
     // pattern table, palettes, and number of vertices drawn.
     int stride = sizeof(struct glVertex);
     glBufferData(GL_ARRAY_BUFFER, spriteVertices.size() * sizeof(struct glVertex),
-		 spriteVertices.data(), GL_DYNAMIC_DRAW);
+                 spriteVertices.data(), GL_DYNAMIC_DRAW);
     checkGlErrors(0);
     glVertexAttribPointer(xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct glVertex, x_low));
+                          (const GLvoid *) offsetof(struct glVertex, x_low));
     glEnableVertexAttribArray(xyAttrib);
     checkGlErrors(0);
     glVertexAttribPointer(xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct glVertex, x_high));
+                          (const GLvoid *) offsetof(struct glVertex, x_high));
     glEnableVertexAttribArray(xHighAttrib);
     checkGlErrors(0);
     glVertexAttribPointer(tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct glVertex, tile));
+                          (const GLvoid *) offsetof(struct glVertex, tile));
     glEnableVertexAttribArray(tuvAttrib);
     checkGlErrors(0);
     glVertexAttribPointer(paletteNAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-			  (const GLvoid *) offsetof(struct glVertex, palette));
+                          (const GLvoid *) offsetof(struct glVertex, palette));
     glEnableVertexAttribArray(paletteNAttrib);
     checkGlErrors(0);
 
     glUniform1i(glGetUniformLocation(shader, "patternTable"),
-		SPRITE_PATTERN_TABLE_TEXID);
+                SPRITE_PATTERN_TABLE_TEXID);
     checkGlErrors(0);
 
     // FIXME magic number 16
     glUniform4fv(glGetUniformLocation(shader, "localPalettes"), 16,
-		 spritePalettes);
+                 spritePalettes);
     checkGlErrors(0);
 
     glDrawArrays(GL_TRIANGLES, 0, spriteVertices.size());
@@ -681,7 +681,7 @@ int initWindow(GLFWwindow **window_p) {
   /* Create a windowed mode window and its OpenGL context */
   GLFWwindow *window;
   window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT,
-			    PROGRAM_NAME, NULL, NULL);
+                            PROGRAM_NAME, NULL, NULL);
   if (!window)
     {
       cerr << "glfwCreateWindow failed\n";

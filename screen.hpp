@@ -99,7 +99,7 @@ const int DONKEY_KONG_BIG_HEAD_MODE = 0;
 const int DONKEY_KONG_BIG_HEAD_INCREASE = 16;
 
 class Screen {
- public:
+public:
   Screen();
 
   void setUniversalBg(int);
@@ -123,7 +123,7 @@ class Screen {
 
   unsigned char pollKeys();
 
- private:
+private:
   GLFWwindow *window;
   GLuint shader;
   // shader attribute locations
