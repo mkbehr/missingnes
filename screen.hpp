@@ -95,6 +95,9 @@ const unsigned char KEY_MASK_DOWN = 1<<5;
 const unsigned char KEY_MASK_LEFT = 1<<6;
 const unsigned char KEY_MASK_RIGHT = 1<<7;
 
+const int DONKEY_KONG_BIG_HEAD_MODE = 0;
+const int DONKEY_KONG_BIG_HEAD_INCREASE = 16;
+
 class Screen {
  public:
   Screen();

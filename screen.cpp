@@ -535,6 +535,31 @@ void Screen::drawToBuffer() {
       unsigned char tile = sprite.tile;
       unsigned char palette_index = (sprite.attributes & OAM_PALETTE);
 
+      if (DONKEY_KONG_BIG_HEAD_MODE) {
+        // The main head tiles seem to be the even-numbered tiles in
+        // the first 4 rows of 16 tiles each. (There are more for
+        // various special states but I'll ignore them.)
+        if ((tile < 0x40) && ((tile % 2) == 0)) {
+	  y_top += DONKEY_KONG_BIG_HEAD_INCREASE;
+	  // The back-of-head tiles seem to be at multiples of 4, and
+	  // the front-of-head tiles are at 2 plus a multiple of 4.
+	  // They're all facing to the right.
+	  int is_head_front = (tile % 4);
+	  // Stretch front head to the right and back head to the
+	  // left, unless it's horizontally mirrored.
+	  if ((!!is_head_front) != (!!(sprite.attributes & OAM_FLIP_HORIZONTAL))) {
+	    x_right += DONKEY_KONG_BIG_HEAD_INCREASE;
+	    x_right_high = (x_right < (DONKEY_KONG_BIG_HEAD_INCREASE + 8) ? 1 : 0);
+	  } else {
+	    if (x_left <= DONKEY_KONG_BIG_HEAD_INCREASE) {
+	      x_left = 0;
+	    } else {
+	      x_left -= DONKEY_KONG_BIG_HEAD_INCREASE;
+	    }
+	  }
+	}
+      }
+
       struct glVertex bottomLeft =
 	{x_left, y_bottom, x_left_high,
 	 tile, u_left, v_bottom, palette_index};
