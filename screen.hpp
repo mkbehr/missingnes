@@ -86,6 +86,15 @@ const float SECONDS_PER_FRAME = 1.0 / MAX_FPS;
 // gain determining seconds per frame (as in a kalman filter)
 const float SPF_GAIN = 0.2;
 
+const unsigned char KEY_MASK_A = 1<<0;
+const unsigned char KEY_MASK_B = 1<<1;
+const unsigned char KEY_MASK_SELECT = 1<<2;
+const unsigned char KEY_MASK_START = 1<<3;
+const unsigned char KEY_MASK_UP = 1<<4;
+const unsigned char KEY_MASK_DOWN = 1<<5;
+const unsigned char KEY_MASK_LEFT = 1<<6;
+const unsigned char KEY_MASK_RIGHT = 1<<7;
+
 class Screen {
  public:
   Screen();
@@ -108,6 +117,8 @@ class Screen {
   void testRenderLoop();
   void drawToBuffer();
   int draw();
+
+  unsigned char pollKeys();
 
  private:
   GLFWwindow *window;

@@ -49,6 +49,15 @@ SECONDS_PER_FRAME = 1.0 / MAX_FPS
 # gain determining seconds per frame (as in a kalman filter)
 SPF_GAIN = 0.2
 
+KEY_MASK_A = 1<<0;
+KEY_MASK_B = 1<<1;
+KEY_MASK_SELECT = 1<<2;
+KEY_MASK_START = 1<<3;
+KEY_MASK_UP = 1<<4;
+KEY_MASK_DOWN = 1<<5;
+KEY_MASK_LEFT = 1<<6;
+KEY_MASK_RIGHT = 1<<7;
+
 def trace(func):
     fname = func.func_name
     def out(*args,**kwargs):
@@ -91,6 +100,9 @@ class CScreen(object):
 
         libscreen.ex_draw.argtypes = [c_void_p]
         libscreen.ex_draw.restype = c_int
+
+        libscreen.ex_pollKeys.argtypes = [c_void_p]
+        libscreen.ex_pollKeys.restype = c_ubyte
 
         self.libscreen = libscreen
 
@@ -149,6 +161,9 @@ class CScreen(object):
     def draw(self):
         return self.libscreen.ex_draw(self.screen_p)
 
+    def pollKeys(self):
+        return self.libscreen.ex_pollKeys(self.screen_p)
+
 
 class Screen(object):
 
@@ -187,16 +202,18 @@ class Screen(object):
         # structure for this code.
 
         # # forgive me demeter for I have sinned
-        # ips = self.ppu.cpu.controller.inputState.states
+        ips = self.ppu.cpu.controller.inputState.states
 
-        # ips[0] = self.pollKey(glfw.KEY_A) # A
-        # ips[1] = self.pollKey(glfw.KEY_S) # B
-        # ips[2] = self.pollKey(glfw.KEY_BACKSLASH) # select: mapping to \ for now
-        # ips[3] = self.pollKey(glfw.KEY_ENTER) # start
-        # ips[4] = self.pollKey(glfw.KEY_UP) # up
-        # ips[5] = self.pollKey(glfw.KEY_DOWN) # down
-        # ips[6] = self.pollKey(glfw.KEY_LEFT) # left
-        # ips[7] = self.pollKey(glfw.KEY_RIGHT) # right
+        keys = self.cscreen.pollKeys()
+
+        ips[0] = bool(keys & KEY_MASK_A) # A: A
+        ips[1] = bool(keys & KEY_MASK_B) # B: S
+        ips[2] = bool(keys & KEY_MASK_SELECT) # Select: \
+        ips[3] = bool(keys & KEY_MASK_START) # Start: Enter
+        ips[4] = bool(keys & KEY_MASK_UP) # Up: Up
+        ips[5] = bool(keys & KEY_MASK_DOWN) # Down: Down
+        ips[6] = bool(keys & KEY_MASK_LEFT) # Left: Left
+        ips[7] = bool(keys & KEY_MASK_RIGHT) # Right: Right
 
         timenow = time.time()
 

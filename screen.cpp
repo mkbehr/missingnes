@@ -605,6 +605,41 @@ int Screen::draw() {
   return 0;
 }
 
+// Polls for keys, returns their state in a one-byte bitfield (masks
+// defined in header)
+unsigned char Screen::pollKeys() {
+  // Currently, we're polling events here and in draw(). Is that a
+  // problem? Not sure.
+  glfwPollEvents();
+  // TODO check to make sure we've set GLFW_STICKY_KEYS
+  unsigned char out = 0;
+  if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+    out |= KEY_MASK_A;
+  }
+  if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+    out |= KEY_MASK_B;
+  }
+  if (glfwGetKey(window, GLFW_KEY_BACKSLASH) == GLFW_PRESS) {
+    out |= KEY_MASK_SELECT;
+  }
+  if (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
+    out |= KEY_MASK_START;
+  }
+  if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+    out |= KEY_MASK_UP;
+  }
+  if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+    out |= KEY_MASK_DOWN;
+  }
+  if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+    out |= KEY_MASK_LEFT;
+  }
+  if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+    out |= KEY_MASK_RIGHT;
+  }
+  return out;
+}
+
 
 int initWindow(GLFWwindow **window_p) {
   /* Initialize the library */
@@ -707,6 +742,10 @@ extern "C" {
 
   int ex_draw(Screen *sc) {
     return sc->draw();
+  }
+
+  unsigned char ex_pollKeys(Screen *sc) {
+    return sc->pollKeys();
   }
 
 }
