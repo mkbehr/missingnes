@@ -19,7 +19,7 @@ PPU_RAM_SIZE = 0x0800
 
 IO_OAMDMA = 0x4014
 
-APU_WARN = False
+APU_WARN = True
 JOYSTICK_WARN = False
 
 class Memory(object):
@@ -83,10 +83,6 @@ class Memory(object):
         # fix it without like a page table, which is probably more
         # effort than it's worth
         if 0x0 <= address < 0x2000:
-            # if (address % 0x800) == 0xfd:
-            #     print >> sys.stderr, "--- WRITING TO 0xfd FROM %x WITH %x ---" % (address, ord(val))
-            #     print >> sys.stderr, "PC after instruction is %x" % self.cpu.PC
-            #     print >> sys.stderr, "--- WRITING TO 0xfd ---"
             # Internal RAM from $0000 to $07FF; higher addresses here are mirrored
             self.ram[address % 0x0800] = val
         elif 0x2000 <= address < 0x4000:
@@ -98,16 +94,12 @@ class Memory(object):
                 for i in range(256):
                     self.cpu.ppu.oam[i] = self.read(startaddr + i)
             elif address == 0x4016:
-                strobe = bool(ord(val) & 1) 
+                strobe = bool(ord(val) & 1)
                 self.cpu.controller.inputStrobe(strobe)
-            elif address == 0x4017:
-                if APU_WARN:
-                    print >> sys.stderr, "Warning: ignoring APU frame counter write"
             else:
                 # the only non-APU registers are OAMDMA and the joysticks
                 # see http://wiki.nesdev.com/w/index.php/2A03
-                if APU_WARN:
-                    print >> sys.stderr, "Warning: ignoring write to APU register 0x%04x" % address
+                self.cpu.apu.write(address, val)
         elif 0x4020 <= address < 0x6000:
             raise RuntimeError("Write to unmapped address %x" % address)
         elif 0x6000 <= address < 0x8000:
@@ -116,7 +108,7 @@ class Memory(object):
             raise RuntimeError("Tried to write to ROM address %x" % address)
         else:
             raise RuntimeError("Address out of range: %x" % address)
-    
+
     def dereference(self, paddr): # utility function
         """Dereference a 16-bit pointer."""
         pointer = self.readMany(paddr, nbytes=2)

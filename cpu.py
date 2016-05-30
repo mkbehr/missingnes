@@ -3,6 +3,7 @@ import instruction
 import mem
 import opc
 import ppu
+import apu
 
 import sys
 
@@ -59,6 +60,7 @@ class CPU(object):
         self.ppuStoredCycles = 0
 
         self.ppu = ppu.PPU(self)
+        self.apu = apu.APU(self)
 
         # Cycles for the PPU to catch up on. (When the CPU executes a
         # cycle, this goes up by the cycle count. When the PPU
