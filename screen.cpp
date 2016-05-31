@@ -540,6 +540,8 @@ void Screen::drawToBuffer() {
         // the first 4 rows of 16 tiles each. (There are more for
         // various special states but I'll ignore them.)
         if ((tile < 0x40) && ((tile % 2) == 0)) {
+          // I forgot to check for overflow here but the result is
+          // hilarious so I'm gonna leave it in
 	  y_top += DONKEY_KONG_BIG_HEAD_INCREASE;
 	  // The back-of-head tiles seem to be at multiples of 4, and
 	  // the front-of-head tiles are at 2 plus a multiple of 4.

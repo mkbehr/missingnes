@@ -39,6 +39,7 @@ LOCAL_PALETTES_LENGTH = 16*4
 # number of values (elements) per vertex in the vertex buffer
 VERTEX_ELTS = 7
 
+# TODO: read flags in game for whether or not to draw bg/sprites
 DRAW_BG = True
 DRAW_SPRITES = True
 

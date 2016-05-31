@@ -54,6 +54,9 @@ PULSE_LC_TABLE = [10, 254, 20, 2,
                   192, 24, 72, 26,
                   16, 28, 32, 30]
 
+CPU_FREQUENCY = 1.789773e6
+CPU_CYCLES_PER_WAVEFORM_CYCLE = 16
+
 class PulseChannel(object):
 
     # The pulse channel outputs a square wave. Seems to work roughly like this:
@@ -127,6 +130,16 @@ class PulseChannel(object):
                     % (self.apu.cpu.ppu.frame, self.channelID)
         elif register == 2: # Timer low
             self.timer = (self.timer & PULSE_TIMER_HIGH_VALUE_MASK) + val
+            if APU_INFO:
+                if self.timer < 8:
+                    freq_string = "disabled"
+                else:
+                    freq_string = "%f Hz" % \
+                                  (CPU_FREQUENCY / (CPU_CYCLES_PER_WAVEFORM_CYCLE * (self.timer + 1)))
+                print >> sys.stderr, \
+                    "Frame %d: APU pulse %d timer %d after low bits (%s)" \
+                    % (self.apu.cpu.ppu.frame, self.channelID,
+                       self.timer, freq_string)
         elif register == 3: # Length counter load, timer high
             self.timer = (self.timer & PULSE_TIMER_LOW_VALUE_MASK) + \
                          ((val & PULSE_TIMER_HIGH_INPUT_MASK) << PULSE_TIMER_HIGH_VALUE_OFFSET)
@@ -136,6 +149,17 @@ class PulseChannel(object):
                 # TODO If I'm reading the nesdev wiki's page on the
                 # APU length counter right, this should also restart
                 # the envelope and reset the phase.
+            if APU_INFO:
+                # not printing length counter info for now
+                if self.timer < 8:
+                    freq_string = "disabled"
+                else:
+                    freq_string = "%f Hz" % \
+                                  (CPU_FREQUENCY / (CPU_CYCLES_PER_WAVEFORM_CYCLE * (self.timer + 1)))
+                print >> sys.stderr, \
+                    "Frame %d: APU pulse %d timer %d after high bits (%s)" \
+                    % (self.apu.cpu.ppu.frame, self.channelID,
+                       self.timer, freq_string)
         else:
             raise RuntimeError("Unrecognized pulse channel register")
 
