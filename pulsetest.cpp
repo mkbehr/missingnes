@@ -10,7 +10,7 @@ int main(int argc, char **argv)
 {
   // Default: testing with first pitch in Donkey Kong:
   // 261.357039 Hz, 50% duty
-  float frequency = 261.357039;
+  float frequency = 260.747815;
   if (argc >= 2) {
     frequency = std::stof(argv[1]);
   }

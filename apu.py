@@ -132,10 +132,10 @@ class PulseChannel(object):
             self.timer = (self.timer & PULSE_TIMER_HIGH_VALUE_MASK) + val
             if APU_INFO:
                 if self.timer < 8:
-                    freq_string = "disabled"
+                    freq_string = "silent"
                 else:
                     freq_string = "%f Hz" % \
-                                  (CPU_FREQUENCY / (CPU_CYCLES_PER_WAVEFORM_CYCLE * (self.timer + 1)))
+                                  (CPU_FREQUENCY / (CPU_CYCLES_PER_WAVEFORM_CYCLE * (self.timer + 2)))
                 print >> sys.stderr, \
                     "Frame %d: APU pulse %d timer %d after low bits (%s)" \
                     % (self.apu.cpu.ppu.frame, self.channelID,
@@ -152,10 +152,10 @@ class PulseChannel(object):
             if APU_INFO:
                 # not printing length counter info for now
                 if self.timer < 8:
-                    freq_string = "disabled"
+                    freq_string = "silent"
                 else:
                     freq_string = "%f Hz" % \
-                                  (CPU_FREQUENCY / (CPU_CYCLES_PER_WAVEFORM_CYCLE * (self.timer + 1)))
+                                  (CPU_FREQUENCY / (CPU_CYCLES_PER_WAVEFORM_CYCLE * (self.timer + 2)))
                 print >> sys.stderr, \
                     "Frame %d: APU pulse %d timer %d after high bits (%s)" \
                     % (self.apu.cpu.ppu.frame, self.channelID,
