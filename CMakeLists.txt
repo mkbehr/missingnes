@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.1)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "DEBUG")
   #set(CMAKE_BUILD_TYPE "RELEASE")
@@ -7,6 +7,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(CMAKE_CXX_COMPILER g++)
+set(CMAKE_CXX_STANDARD 11)
 
 find_package(PythonInterp)
 find_package(PythonLibs)
@@ -60,6 +61,15 @@ add_dependencies(pulsetest pulsewave)
 set_target_properties(pulsetest PROPERTIES
   COMPILE_DEFINITIONS "__MACOSX_CORE__")
 target_link_libraries(pulsetest
+  pulsewave
+  ${CoreFoundation_FRAMEWORK} ${CoreAudio_FRAMEWORK} ${CoreMIDI_FRAMEWORK}
+  "stk")
+
+add_library(apu MODULE apu.cpp)
+add_dependencies(apu pulsewave)
+set_target_properties(apu PROPERTIES
+  COMPILE_DEFINITIONS "__MACOSX_CORE__")
+target_link_libraries(apu
   pulsewave
   ${CoreFoundation_FRAMEWORK} ${CoreAudio_FRAMEWORK} ${CoreMIDI_FRAMEWORK}
   "stk")

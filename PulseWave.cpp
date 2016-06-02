@@ -4,7 +4,7 @@ using namespace stk;
 
 PulseWave::PulseWave(void)
   // arbitrary default for period
-  : time_(0.0), rate_(1.0), duty_(0.5)
+  : time_(0.0), rate_(1.0), duty_(0.5), enabled_(0)
 {
   Stk::addSampleRateAlert(this);
 }
@@ -47,6 +47,10 @@ void PulseWave :: addTime( StkFloat time )
   time_ += time;
 }
 
+void PulseWave :: setEnabled(bool enabled) {
+  enabled_ = enabled;
+}
+
 StkFloat PulseWave :: tick( void )
 {
   while ( time_ < 0.0 ) {
@@ -60,6 +64,9 @@ StkFloat PulseWave :: tick( void )
   // hardware works. Implement that.
   lastFrame_[0] =
     (time_ / PULSE_PERIOD) < (1.0 - duty_) ? 1.0 : 0.0;
+  if (!enabled_) {
+    lastFrame_[0] = 0.0;
+  }
   time_ += rate_;
   return lastFrame_[0];
 }
@@ -80,10 +87,22 @@ StkFrames& PulseWave :: tick( StkFrames& frames, unsigned int channel )
     // TODO: there's a 1/8 period offset because that's how the NES
     // hardware works. Implement that.
     tmp = (time_ / PULSE_PERIOD) < (1.0 - duty_) ? 1.0 : 0.0;
+    if (!enabled_) {
+      tmp = 0.0;
+    }
     *samples = tmp;
     time_ += rate_;
   }
 
   lastFrame_[0] = tmp;
   return frames;
+}
+
+// Note: not guaranteed to print entire state
+void PulseWave::printState(void) {
+  const char *enabledStr = enabled_ ? "enabled" : "disabled";
+  float frequency = rate_ * Stk::sampleRate() / PULSE_PERIOD;;
+  printf("Pulse wave channel %d: %s, duty %f, rate %f (%f Hz)\n",
+         // dummy channel number below
+         -1, enabledStr, (float) duty_, (float) rate_, frequency);
 }

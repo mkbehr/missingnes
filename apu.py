@@ -1,8 +1,13 @@
 import sys
+import ctypes
+from ctypes import CDLL, c_void_p, c_int, c_float, c_ubyte
+
+# TODO: note when an APU cycle starts, react (and print info)
+# accordingly
 
 APU_FRAME_COUNTER_WARN = False
 APU_WARN = False
-APU_INFO = True
+APU_INFO = False
 
 APU_STATUS = 0x4015
 APU_FRAME_COUNTER = 0x4017
@@ -20,6 +25,10 @@ PULSE_2_STATUS_MASK = 0x2
 TRIANGLE_STATUS_MASK = 0x4
 NOISE_STATUS_MASK = 0x8
 DMC_STATUS_MASK = 0x10
+
+FRAME_COUNTER_IRQ_INHIBIT_MASK = 0x40
+FRAME_COUNTER_MODE_MASK = 0x80
+FRAME_COUNTER_MODE_OFFSET = 7
 
 PULSE_ENVELOPE_DIVIDER_MASK = 0xf
 PULSE_ENVELOPE_DIVIDER_OFFSET = 0
@@ -57,6 +66,34 @@ PULSE_LC_TABLE = [10, 254, 20, 2,
 CPU_FREQUENCY = 1.789773e6
 CPU_CYCLES_PER_WAVEFORM_CYCLE = 16
 
+APU_FREQUENCY = CPU_FREQUENCY / 2.0
+APU_CYCLES_PER_4STEP_FRAME = 14915
+APU_CYCLES_PER_5STEP_FRAME = 18641
+
+class CAPU(object):
+
+    def __init__(self):
+        libapu = CDLL("libapu.so")
+
+        libapu.ex_initAPU.restype = c_void_p
+
+        libapu.ex_setPulsePeriod.argtypes = \
+        [c_void_p, c_int, c_float]
+
+        libapu.ex_setPulseEnabled.argtypes = \
+        [c_void_p, c_int, c_ubyte]
+
+        self.libapu = libapu
+
+        self.apu_p = libapu.ex_initAPU()
+
+    def setPulsePeriod(self, pulse_n, period):
+        self.libapu.ex_setPulsePeriod(self.apu_p, pulse_n, period)
+
+    def setPulseEnabled(self, pulse_n, enabled):
+        self.libapu.ex_setPulseEnabled(self.apu_p, pulse_n, enabled)
+
+
 class PulseChannel(object):
 
     # The pulse channel outputs a square wave. Seems to work roughly like this:
@@ -73,7 +110,6 @@ class PulseChannel(object):
     #   the overall output from here to the C++ code should be:
     #   period, duty, envelope, sweep unit state, envelope divider
     #   state.
-
 
 
     def __init__(self, apu, channelID):
@@ -94,11 +130,18 @@ class PulseChannel(object):
         self.sweepShift = 0
         self.sweepReload = False
 
+
     def setEnabled(self, enabled):
         self.enabled = enabled
         if not enabled:
             self.lengthCounter = 0
             # TODO ensure that the channel is immediately silenced
+        if enabled:
+            print "Trying to enable channel %d" % self.channelID # DEBUG
+        self.apu.capu.setPulseEnabled(self.channelID, enabled)
+
+    def getPeriod(self):
+        return (self.timer + 2) * CPU_CYCLES_PER_WAVEFORM_CYCLE / CPU_FREQUENCY
 
     def write(self, register, val):
         # register should be between 0 and 3 inclusive, and val should be an integer
@@ -130,6 +173,7 @@ class PulseChannel(object):
                     % (self.apu.cpu.ppu.frame, self.channelID)
         elif register == 2: # Timer low
             self.timer = (self.timer & PULSE_TIMER_HIGH_VALUE_MASK) + val
+            self.apu.capu.setPulsePeriod(self.channelID, self.getPeriod())
             if APU_INFO:
                 if self.timer < 8:
                     freq_string = "silent"
@@ -149,6 +193,7 @@ class PulseChannel(object):
                 # TODO If I'm reading the nesdev wiki's page on the
                 # APU length counter right, this should also restart
                 # the envelope and reset the phase.
+            self.apu.capu.setPulsePeriod(self.channelID, self.getPeriod())
             if APU_INFO:
                 # not printing length counter info for now
                 if self.timer < 8:
@@ -156,10 +201,18 @@ class PulseChannel(object):
                 else:
                     freq_string = "%f Hz" % \
                                   (CPU_FREQUENCY / (CPU_CYCLES_PER_WAVEFORM_CYCLE * (self.timer + 2)))
+                # Length counter is clocked by the frame counter,
+                # twice per APU frame. The duration of an APU frame
+                # depends on the sequencer mode, which is set by the
+                # frame counter.
+
+                # TODO: In the five-step sequence, the frame counter
+                # clocks things at uneven intervals. That might matter somewhere.
+                duration = self.lengthCounter * self.apu.frameDuration() / 2.0
                 print >> sys.stderr, \
-                    "Frame %d: APU pulse %d timer %d after high bits (%s)" \
+                    "Frame %d: APU pulse %d timer %d after high bits (%s); length counter %d (%fs)" \
                     % (self.apu.cpu.ppu.frame, self.channelID,
-                       self.timer, freq_string)
+                       self.timer, freq_string, self.lengthCounter, duration)
         else:
             raise RuntimeError("Unrecognized pulse channel register")
 
@@ -167,16 +220,22 @@ class APU(object):
 
     def __init__(self, cpu):
         self.cpu = cpu
-        self.pulse1 = PulseChannel(self, 1)
-        self.pulse2 = PulseChannel(self, 2)
+        self.pulse1 = PulseChannel(self, 0)
+        self.pulse2 = PulseChannel(self, 1)
         self.triangleEnabled = False
         self.noiseEnabled = False
         self.dmcEnabled = False
+        self.fcMode = 0
+        self.fcIRQInhibit = False
+
+        self.capu = CAPU()
 
     def write(self, address, val):
         if address == APU_STATUS:
             self.setStatus(ord(val))
         elif address == APU_FRAME_COUNTER:
+            self.fcMode = (ord(val) & FRAME_COUNTER_MODE_MASK) >> FRAME_COUNTER_MODE_OFFSET
+            self.fcIRQInhibit = not bool(ord(val) & FRAME_COUNTER_IRQ_INHIBIT_MASK)
             if APU_FRAME_COUNTER_WARN:
                 print >> sys.stderr, \
                     "Frame %d: ignoring APU frame counter write: 0b%s" % \
@@ -233,3 +292,9 @@ class APU(object):
             else:
                 print >> sys.stderr, "Frame %d: APU channels enabled: none" % \
                     self.cpu.ppu.frame
+
+    def frameDuration(self):
+        if not self.fcMode:
+            return APU_CYCLES_PER_4STEP_FRAME / APU_FREQUENCY
+        else:
+            return APU_CYCLES_PER_5STEP_FRAME / APU_FREQUENCY

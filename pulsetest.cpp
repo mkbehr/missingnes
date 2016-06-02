@@ -27,6 +27,7 @@ int main(int argc, char **argv)
   PulseWave pulse;
   pulse.setPeriod(1.0/frequency);
   pulse.setDuty(duty);
+  pulse.setEnabled(1);
   RtWvOut *dac = 0;
   try {
     // Define and open the default realtime output device for one-channel playback
