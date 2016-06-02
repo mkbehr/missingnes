@@ -1,6 +1,6 @@
 import sys
 import ctypes
-from ctypes import CDLL, c_void_p, c_int, c_float, c_ubyte
+from ctypes import CDLL, c_void_p, c_uint, c_float, c_ubyte
 
 # TODO: note when an APU cycle starts, react (and print info)
 # accordingly
@@ -78,10 +78,10 @@ class CAPU(object):
         libapu.ex_initAPU.restype = c_void_p
 
         libapu.ex_setPulsePeriod.argtypes = \
-        [c_void_p, c_int, c_float]
+        [c_void_p, c_uint, c_float]
 
         libapu.ex_setPulseEnabled.argtypes = \
-        [c_void_p, c_int, c_ubyte]
+        [c_void_p, c_uint, c_ubyte]
 
         self.libapu = libapu
 

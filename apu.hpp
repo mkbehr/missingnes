@@ -9,6 +9,7 @@
 #include "PulseWave.hpp"
 
 const int N_PULSE_WAVES = 2;
+const int N_SOURCES = 2;
 
 const stk::StkFloat SAMPLE_RATE = 44100.0;
 
@@ -18,19 +19,19 @@ public:
   ~APU();
   void apuInit();
   stk::StkFloat tick();
-  void setPulsePeriod(int, stk::StkFloat);
-  void setPulseEnabled(int, bool);
+  void setPulsePeriod(unsigned int, stk::StkFloat);
+  void setPulseEnabled(unsigned int, bool);
   // TODO more interface functions
 
   bool terminating;
 
-  std::mutex audioMutex;
+
 
 protected:
-  // to keep things simple, we'll only work with one pulse wave for now
-  PulseWave pulse;
+  PulseWave pulses[N_PULSE_WAVES];
 
   std::thread audioThread;
+  std::mutex audioMutex;
 
 };
 

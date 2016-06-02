@@ -1,3 +1,6 @@
+#include <stdexcept>
+#include <string>
+
 #include "apu.hpp"
 
 #include "stk/RtWvOut.h"
@@ -23,12 +26,7 @@ void audioRun(APU *apu) {
   }
 
   while (!(apu->terminating)) {
-    apu->audioMutex.lock();
     stk::StkFloat tickValue = apu->tick();
-    if (tickValue > 1.0) {
-      printf("Big tick value: %f\n", tickValue);
-    }
-    apu->audioMutex.unlock();
     // This can apparently throw an StkError, but I don't know when
     // or why, so we'll happily crash in that case
     try {
@@ -55,28 +53,38 @@ void APU::apuInit(void) {
 }
 
 stk::StkFloat APU::tick(void) {
-  // TODO get mutex
+  std::lock_guard<std::mutex> lock(audioMutex);
 
-  // TODO eventually mix sources
-  return pulse.tick();
+  stk::StkFloat out = 0.0;
+  for (int pulse_i = 0; pulse_i < N_PULSE_WAVES; pulse_i++) {
+    out += pulses[pulse_i].tick();
+  }
+  out /= N_SOURCES;
+  return out;
 }
 
-void APU::setPulsePeriod(int pulse_n, stk::StkFloat period) {
+void APU::setPulsePeriod(unsigned int pulse_n, stk::StkFloat period) {
   // Currently only dealing with pulse channel 2 (index 1)
-  if (pulse_n != 1) {
-    return;
+  if (pulse_n >= N_PULSE_WAVES) {
+    throw std::range_error(
+      std::string("setPulsePeriod: bad pulse channel: ") +
+      std::to_string(pulse_n));
+    exit(1);
   }
   std::lock_guard<std::mutex> lock(audioMutex);
-  pulse.setPeriod(period);
+  pulses[pulse_n].setPeriod(period);
 }
 
-void APU::setPulseEnabled(int pulse_n, bool enabled) {
+void APU::setPulseEnabled(unsigned int pulse_n, bool enabled) {
   // Currently only dealing with pulse channel 2 (index 1)
-  if (pulse_n != 1) {
-    return;
+  if (pulse_n >= N_PULSE_WAVES) {
+    throw std::range_error(
+      std::string("setPulseEnabled: bad pulse channel: ")
+      + std::to_string(pulse_n));
+    exit(1);
   }
   std::lock_guard<std::mutex> lock(audioMutex);
-  pulse.setEnabled(enabled);
+  pulses[pulse_n].setEnabled(enabled);
 }
 
 // ctypes interface
@@ -89,11 +97,11 @@ extern "C" {
     return out;
   }
 
-  void ex_setPulsePeriod(APU *apu, int pulse_n, float period) {
+  void ex_setPulsePeriod(APU *apu, unsigned int pulse_n, float period) {
     apu->setPulsePeriod(pulse_n, (stk::StkFloat) period);
   }
 
-  void ex_setPulseEnabled(APU *apu, int pulse_n, unsigned char enabled) {
+  void ex_setPulseEnabled(APU *apu, unsigned int pulse_n, unsigned char enabled) {
     apu->setPulseEnabled(pulse_n, enabled);
   }
 
