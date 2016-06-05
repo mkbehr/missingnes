@@ -64,7 +64,6 @@ stk::StkFloat APU::tick(void) {
 }
 
 void APU::setPulsePeriod(unsigned int pulse_n, stk::StkFloat period) {
-  // Currently only dealing with pulse channel 2 (index 1)
   if (pulse_n >= N_PULSE_WAVES) {
     throw std::range_error(
       std::string("setPulsePeriod: bad pulse channel: ") +
@@ -76,7 +75,6 @@ void APU::setPulsePeriod(unsigned int pulse_n, stk::StkFloat period) {
 }
 
 void APU::setPulseEnabled(unsigned int pulse_n, bool enabled) {
-  // Currently only dealing with pulse channel 2 (index 1)
   if (pulse_n >= N_PULSE_WAVES) {
     throw std::range_error(
       std::string("setPulseEnabled: bad pulse channel: ")
@@ -85,6 +83,17 @@ void APU::setPulseEnabled(unsigned int pulse_n, bool enabled) {
   }
   std::lock_guard<std::mutex> lock(audioMutex);
   pulses[pulse_n].setEnabled(enabled);
+}
+
+void APU::setPulseDuty(unsigned int pulse_n, stk::StkFloat duty) {
+  if (pulse_n >= N_PULSE_WAVES) {
+    throw std::range_error(
+      std::string("setPulsePeriod: bad pulse channel: ") +
+      std::to_string(pulse_n));
+    exit(1);
+  }
+  std::lock_guard<std::mutex> lock(audioMutex);
+  pulses[pulse_n].setDuty(duty);
 }
 
 // ctypes interface
@@ -103,6 +112,10 @@ extern "C" {
 
   void ex_setPulseEnabled(APU *apu, unsigned int pulse_n, unsigned char enabled) {
     apu->setPulseEnabled(pulse_n, enabled);
+  }
+
+  void ex_setPulseDuty(APU *apu, unsigned int pulse_n, float duty) {
+    apu->setPulseDuty(pulse_n, (stk::StkFloat) duty);
   }
 
 }

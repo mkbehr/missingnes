@@ -21,6 +21,7 @@ public:
   stk::StkFloat tick();
   void setPulsePeriod(unsigned int, stk::StkFloat);
   void setPulseEnabled(unsigned int, bool);
+  void setPulseDuty(unsigned int, stk::StkFloat);
   // TODO more interface functions
 
   bool terminating;

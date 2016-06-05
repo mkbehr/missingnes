@@ -39,6 +39,8 @@ PULSE_LENGTH_HALT_OFFSET = 5
 PULSE_DUTY_MASK = 0xc0
 PULSE_DUTY_OFFSET = 6
 
+PULSE_DUTY_TABLE = [0.125, 0.25, 0.5, 0.75]
+
 PULSE_SWEEP_SHIFT_MASK = 0x7
 PULSE_SWEEP_SHIFT_OFFSET = 0
 PULSE_SWEEP_NEGATE_MASK = 0x8
@@ -83,6 +85,9 @@ class CAPU(object):
         libapu.ex_setPulseEnabled.argtypes = \
         [c_void_p, c_uint, c_ubyte]
 
+        libapu.ex_setPulseDuty.argtypes = \
+        [c_void_p, c_uint, c_float]
+
         self.libapu = libapu
 
         self.apu_p = libapu.ex_initAPU()
@@ -92,6 +97,9 @@ class CAPU(object):
 
     def setPulseEnabled(self, pulse_n, enabled):
         self.libapu.ex_setPulseEnabled(self.apu_p, pulse_n, enabled)
+
+    def setPulseDuty(self, pulse_n, duty):
+        self.libapu.ex_setPulseDuty(self.apu_p, pulse_n, duty)
 
 
 class PulseChannel(object):
@@ -136,8 +144,6 @@ class PulseChannel(object):
         if not enabled:
             self.lengthCounter = 0
             # TODO ensure that the channel is immediately silenced
-        if enabled:
-            print "Trying to enable channel %d" % self.channelID # DEBUG
         self.apu.capu.setPulseEnabled(self.channelID, enabled)
 
     def getPeriod(self):
@@ -150,6 +156,8 @@ class PulseChannel(object):
             self.constantEnvelope = bool(val & PULSE_CONSTANT_ENVELOPE_MASK)
             self.lengthCounterHalt = bool(val & PULSE_LENGTH_HALT_MASK)
             self.duty = (val & PULSE_DUTY_MASK) >> PULSE_DUTY_OFFSET
+            dutyFloat = PULSE_DUTY_TABLE[self.duty]
+            self.apu.capu.setPulseDuty(self.channelID, dutyFloat)
             if APU_INFO:
                 print >> sys.stderr, \
                     "Frame %d: APU pulse %d: divider %d, constant envelope %d, length counter halt %d, duty %d" % \

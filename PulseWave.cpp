@@ -60,10 +60,15 @@ StkFloat PulseWave :: tick( void )
     time_ -= PULSE_PERIOD;
   }
 
-  // TODO: there's a 1/8 period offset because that's how the NES
-  // hardware works. Implement that.
+  // There's a 1/8 period offset because that's how the NES hardware
+  // works.
+  StkFloat adjustedTime = time_ - (0.125 * PULSE_PERIOD);
+  if (adjustedTime < 0.0) {
+    adjustedTime += PULSE_PERIOD;
+  }
+
   lastFrame_[0] =
-    (time_ / PULSE_PERIOD) < (1.0 - duty_) ? 1.0 : 0.0;
+    (adjustedTime / PULSE_PERIOD) < duty_ ? 1.0 : 0.0;
   if (!enabled_) {
     lastFrame_[0] = 0.0;
   }
@@ -84,9 +89,15 @@ StkFrames& PulseWave :: tick( StkFrames& frames, unsigned int channel )
     while ( time_ >= PULSE_PERIOD ) {
       time_ -= PULSE_PERIOD;
     }
-    // TODO: there's a 1/8 period offset because that's how the NES
-    // hardware works. Implement that.
-    tmp = (time_ / PULSE_PERIOD) < (1.0 - duty_) ? 1.0 : 0.0;
+
+    // There's a 1/8 period offset because that's how the NES hardware
+    // works.
+    StkFloat adjustedTime = time_ - (0.125 * PULSE_PERIOD);
+    if (adjustedTime < 0.0) {
+      adjustedTime += PULSE_PERIOD;
+    }
+
+    tmp = (adjustedTime / PULSE_PERIOD) < (1.0 - duty_) ? 1.0 : 0.0;
     if (!enabled_) {
       tmp = 0.0;
     }
