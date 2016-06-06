@@ -147,7 +147,8 @@ class PulseChannel(object):
         self.apu.capu.setPulseEnabled(self.channelID, enabled)
 
     def getPeriod(self):
-        return (self.timer + 2) * CPU_CYCLES_PER_WAVEFORM_CYCLE / CPU_FREQUENCY
+        return ((self.timer + 2) * CPU_CYCLES_PER_WAVEFORM_CYCLE
+                / CPU_FREQUENCY)
 
     def write(self, register, val):
         # register should be between 0 and 3 inclusive, and val should be an integer

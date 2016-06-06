@@ -25,7 +25,7 @@ void PulseWave :: setEnabled(bool e) {
 
 float PulseWave :: sample(double time)
 {
-  if (!period) {
+  if (period < MINIMUM_PERIOD) {
     return 0.0;
   }
   float phase = fmod(((time - (0.125 * period)) / period), 1.0);

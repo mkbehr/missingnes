@@ -1,0 +1,7 @@
+#ifndef NES_CONSTANTS_H
+#define NES_CONSTANTS_H
+
+const float CPU_FREQUENCY = 1.789773e6;
+const int CPU_CYCLES_PER_WAVEFORM_CYCLE = 16;
+
+#endif

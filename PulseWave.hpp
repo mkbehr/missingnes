@@ -1,6 +1,17 @@
 #ifndef PULSE_WAVE_H
 #define PULSE_WAVE_H
 
+#include "nesconstants.hpp"
+
+// For a timer value of t, the period is:
+// (t + 2) * CPU_CYCLES_PER_WAVEFORM_CYCLE / CPU_FREQUENCY
+
+// For t of 8 or higher, the pulse wave is played; for t of 7 or
+// lower, it is silenced. Set the minimum period in between so we
+// don't hit floating-point errors.
+const float MINIMUM_PERIOD = ((7.5 + 2) * CPU_CYCLES_PER_WAVEFORM_CYCLE
+                              / CPU_FREQUENCY);
+
 class PulseWave {
 
 public:
