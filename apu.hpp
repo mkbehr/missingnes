@@ -3,37 +3,36 @@
 
 #include <cstdlib>
 #include <string>
-#include <thread>
-#include <mutex>
+
+#include "portaudio.h"
 
 #include "PulseWave.hpp"
 
 const int N_PULSE_WAVES = 2;
 const int N_SOURCES = 2;
 
-const stk::StkFloat SAMPLE_RATE = 44100.0;
+const double SAMPLE_RATE = 44100.0;
 
 class APU {
 public:
-  APU();
+  APU(double);
   ~APU();
   void apuInit();
-  stk::StkFloat tick();
-  void setPulsePeriod(unsigned int, stk::StkFloat);
+  float tick();
+  void setPulsePeriod(unsigned int, float);
   void setPulseEnabled(unsigned int, bool);
-  void setPulseDuty(unsigned int, stk::StkFloat);
+  void setPulseDuty(unsigned int, float);
   // TODO more interface functions
 
-  bool terminating;
-
-
+  float lastSample;
 
 protected:
   PulseWave pulses[N_PULSE_WAVES];
+  double time;
+  double sampleRate;
+  double timeStep;
 
-  std::thread audioThread;
-  std::mutex audioMutex;
-
+  PaStream *stream;
 };
 
 #endif
