@@ -74,14 +74,24 @@ float APU::tick(void) {
   return out;
 }
 
-void APU::setPulsePeriod(unsigned int pulse_n, float period) {
+void APU::resetPulse(unsigned int pulse_n) {
   if (pulse_n >= N_PULSE_WAVES) {
     throw std::range_error(
-      std::string("setPulsePeriod: bad pulse channel: ") +
+      std::string("resetPulse: bad pulse channel: ") +
       std::to_string(pulse_n));
     exit(1);
   }
-  pulses[pulse_n].setPeriod(period);
+  pulses[pulse_n].reset(time);
+}
+
+void APU::setPulseDivider(unsigned int pulse_n, unsigned int divider) {
+  if (pulse_n >= N_PULSE_WAVES) {
+    throw std::range_error(
+      std::string("setPulseDivider: bad pulse channel: ") +
+      std::to_string(pulse_n));
+    exit(1);
+  }
+  pulses[pulse_n].setDivider(divider);
 }
 
 void APU::setPulseEnabled(unsigned int pulse_n, bool enabled) {
@@ -97,7 +107,7 @@ void APU::setPulseEnabled(unsigned int pulse_n, bool enabled) {
 void APU::setPulseDuty(unsigned int pulse_n, float duty) {
   if (pulse_n >= N_PULSE_WAVES) {
     throw std::range_error(
-      std::string("setPulsePeriod: bad pulse channel: ") +
+      std::string("setPulseDuty: bad pulse channel: ") +
       std::to_string(pulse_n));
     exit(1);
   }
@@ -114,8 +124,12 @@ extern "C" {
     return out;
   }
 
-  void ex_setPulsePeriod(APU *apu, unsigned int pulse_n, float period) {
-    apu->setPulsePeriod(pulse_n, period);
+  void ex_resetPulse(APU *apu, unsigned int pulse_n) {
+    apu->resetPulse(pulse_n);
+  }
+
+  void ex_setPulseDivider(APU *apu, unsigned int pulse_n, unsigned int divider) {
+    apu->setPulseDivider(pulse_n, divider);
   }
 
   void ex_setPulseEnabled(APU *apu, unsigned int pulse_n, unsigned char enabled) {

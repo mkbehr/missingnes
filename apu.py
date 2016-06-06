@@ -79,8 +79,11 @@ class CAPU(object):
 
         libapu.ex_initAPU.restype = c_void_p
 
-        libapu.ex_setPulsePeriod.argtypes = \
-        [c_void_p, c_uint, c_float]
+        libapu.ex_resetPulse.argtypes = \
+        [c_void_p, c_uint]
+
+        libapu.ex_setPulseDivider.argtypes = \
+        [c_void_p, c_uint, c_uint]
 
         libapu.ex_setPulseEnabled.argtypes = \
         [c_void_p, c_uint, c_ubyte]
@@ -92,8 +95,11 @@ class CAPU(object):
 
         self.apu_p = libapu.ex_initAPU()
 
-    def setPulsePeriod(self, pulse_n, period):
-        self.libapu.ex_setPulsePeriod(self.apu_p, pulse_n, period)
+    def resetPulse(self, pulse_n):
+        self.libapu.ex_resetPulse(self.apu_p, pulse_n)
+
+    def setPulseDivider(self, pulse_n, divider):
+        self.libapu.ex_setPulseDivider(self.apu_p, pulse_n, divider)
 
     def setPulseEnabled(self, pulse_n, enabled):
         self.libapu.ex_setPulseEnabled(self.apu_p, pulse_n, enabled)
@@ -180,9 +186,9 @@ class PulseChannel(object):
                     print >> sys.stderr, \
                     "Frame %d: APU pulse %d sweep disabled" \
                     % (self.apu.cpu.ppu.frame, self.channelID)
-        elif register == 2: # Timer low
+        elif register == 2: # Timer low (note: does not reset phase or envelope)
             self.timer = (self.timer & PULSE_TIMER_HIGH_VALUE_MASK) + val
-            self.apu.capu.setPulsePeriod(self.channelID, self.getPeriod())
+            self.apu.capu.setPulseDivider(self.channelID, self.timer)
             if APU_INFO:
                 if self.timer < 8:
                     freq_string = "silent"
@@ -196,13 +202,13 @@ class PulseChannel(object):
         elif register == 3: # Length counter load, timer high
             self.timer = (self.timer & PULSE_TIMER_LOW_VALUE_MASK) + \
                          ((val & PULSE_TIMER_HIGH_INPUT_MASK) << PULSE_TIMER_HIGH_VALUE_OFFSET)
+            self.apu.capu.setPulseDivider(self.channelID, self.timer)
             if self.enabled:
                 lengthCounterIndex = (val & PULSE_LC_LOAD_MASK) >> PULSE_LC_LOAD_OFFSET
                 self.lengthCounter = PULSE_LC_TABLE[lengthCounterIndex]
-                # TODO If I'm reading the nesdev wiki's page on the
-                # APU length counter right, this should also restart
-                # the envelope and reset the phase.
-            self.apu.capu.setPulsePeriod(self.channelID, self.getPeriod())
+                # As a side effect, this restarts the envelope and
+                # resets the phase.
+                self.apu.capu.resetPulse(self.channelID)
             if APU_INFO:
                 # not printing length counter info for now
                 if self.timer < 8:

@@ -19,7 +19,8 @@ public:
   ~APU();
   void apuInit();
   float tick();
-  void setPulsePeriod(unsigned int, float);
+  void resetPulse(unsigned int);
+  void setPulseDivider(unsigned int, unsigned int);
   void setPulseEnabled(unsigned int, bool);
   void setPulseDuty(unsigned int, float);
   // TODO more interface functions

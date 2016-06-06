@@ -7,9 +7,9 @@
 #include <string>
 
 // Default: testing with first pitch in Donkey Kong:
-// 260.747815 Hz, 50% duty
+// divider 427 (260.747815 Hz), 50% duty
 const float TEST_DUTY = 0.5;
-const float TEST_FREQUENCY = 260.747815;
+const unsigned int TEST_DIVIDER = 427;
 
 const int SAMPLE_RATE = 44100;
 
@@ -56,9 +56,9 @@ static int patestCallback( const void *inputBuffer, void *outputBuffer,
 
 int main(int argc, char **argv) {
 
-  float frequency = TEST_FREQUENCY;
+  unsigned int divider = TEST_DIVIDER;
   if (argc >= 2) {
-    frequency = std::stof(argv[1]);
+    divider = std::stoi(argv[1]);
   }
   float duty = TEST_DUTY;
   if (argc >= 3) {
@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
   }
 
 
-  pulse.setPeriod(1.0 / frequency);
+  pulse.setDivider(divider);
   pulse.setDuty(duty);
   pulse.setEnabled(1);
 
