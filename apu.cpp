@@ -28,7 +28,8 @@ static int apuCallback (const void *inputBuffer, void *outputBuffer,
 }
 
 APU::APU(double sampleRate)
-  : time(0), sampleRate(sampleRate), timeStep(1.0/sampleRate)
+  : time(0), sampleRate(sampleRate), timeStep(1.0/sampleRate),
+    pulses(std::vector<PulseWave>(2, PulseWave(SAMPLE_RATE)))
 {
 }
 
@@ -41,6 +42,8 @@ APU::~APU(void) {
 }
 
 void APU::apuInit(void) {
+
+
   PaError err = Pa_Initialize();
   checkPaError(err);
 
@@ -66,7 +69,7 @@ void APU::apuInit(void) {
 float APU::tick(void) {
   float out = 0.0;
   for (int pulse_i = 0; pulse_i < N_PULSE_WAVES; pulse_i++) {
-    out += pulses[pulse_i].sample(time);
+    out += pulses[pulse_i].tick();
   }
   out /= N_SOURCES;
   lastSample = out;
@@ -81,7 +84,7 @@ void APU::resetPulse(unsigned int pulse_n) {
       std::to_string(pulse_n));
     exit(1);
   }
-  pulses[pulse_n].reset(time);
+  pulses[pulse_n].reset();
 }
 
 void APU::setPulseDivider(unsigned int pulse_n, unsigned int divider) {
@@ -114,12 +117,34 @@ void APU::setPulseDuty(unsigned int pulse_n, float duty) {
   pulses[pulse_n].setDuty(duty);
 }
 
+void APU::setPulseDuration(unsigned int pulse_n, float duration) {
+  if (pulse_n >= N_PULSE_WAVES) {
+    throw std::range_error(
+      std::string("setPulseDuration: bad pulse channel: ") +
+      std::to_string(pulse_n));
+    exit(1);
+  }
+  pulses[pulse_n].setDuration(duration);
+}
+
+void APU::updatePulseSweep(unsigned int pulse_n,
+                           bool enabled, unsigned int divider,
+                           unsigned int shift, bool negate) {
+  if (pulse_n >= N_PULSE_WAVES) {
+    throw std::range_error(
+      std::string("updatePulseSweep: bad pulse channel: ") +
+      std::to_string(pulse_n));
+    exit(1);
+  }
+  pulses[pulse_n].updateSweep(enabled, divider, shift, negate);
+}
+
 // ctypes interface
 
 extern "C" {
 
   APU *ex_initAPU(void) {
-    APU *out = new APU((double) SAMPLE_RATE);
+    APU *out = new APU(SAMPLE_RATE);
     out->apuInit();
     return out;
   }
@@ -138,6 +163,18 @@ extern "C" {
 
   void ex_setPulseDuty(APU *apu, unsigned int pulse_n, float duty) {
     apu->setPulseDuty(pulse_n, duty);
+  }
+
+  void ex_setPulseDuration(APU *apu, unsigned int pulse_n, float duration) {
+    apu->setPulseDuration(pulse_n, duration);
+  }
+
+  void ex_updatePulseSweep(APU *apu, unsigned int pulse_n,
+                           unsigned char enabled, unsigned int divider,
+                           unsigned int shift, unsigned char negate) {
+    apu->updatePulseSweep(pulse_n,
+                          (bool) enabled, divider,
+                          shift, (bool) negate);
   }
 
 }

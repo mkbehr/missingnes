@@ -31,7 +31,7 @@ paTestData;
 
 static paTestData sdata;
 
-static PulseWave pulse;
+static PulseWave pulse((double) SAMPLE_RATE);
 
 static int patestCallback( const void *inputBuffer, void *outputBuffer,
                            unsigned long framesPerBuffer,
@@ -48,7 +48,7 @@ static int patestCallback( const void *inputBuffer, void *outputBuffer,
     {
       *out++ = data->out;
       *out++ = data->out;
-      data->out = pulse.sample((data->t));
+      data->out = pulse.tick();
       data->t += ((double)1.0/(double)SAMPLE_RATE);
     }
     return 0;

@@ -91,6 +91,12 @@ class CAPU(object):
         libapu.ex_setPulseDuty.argtypes = \
         [c_void_p, c_uint, c_float]
 
+        libapu.ex_setPulseDuration.argtypes = \
+        [c_void_p, c_uint, c_float]
+
+        libapu.ex_updatePulseSweep.argtypes = \
+        [c_void_p, c_uint, c_ubyte, c_uint, c_uint, c_ubyte]
+
         self.libapu = libapu
 
         self.apu_p = libapu.ex_initAPU()
@@ -106,6 +112,13 @@ class CAPU(object):
 
     def setPulseDuty(self, pulse_n, duty):
         self.libapu.ex_setPulseDuty(self.apu_p, pulse_n, duty)
+
+    def setPulseDuration(self, pulse_n, duration):
+        self.libapu.ex_setPulseDuration(self.apu_p, pulse_n, duration)
+
+    def updatePulseSweep(self, pulse_n, enabled, divider, shift, negate):
+        self.libapu.ex_updatePulseSweep(self.apu_p, pulse_n,
+                                        enabled, divider, shift, negate)
 
 
 class PulseChannel(object):
@@ -165,17 +178,21 @@ class PulseChannel(object):
             self.duty = (val & PULSE_DUTY_MASK) >> PULSE_DUTY_OFFSET
             dutyFloat = PULSE_DUTY_TABLE[self.duty]
             self.apu.capu.setPulseDuty(self.channelID, dutyFloat)
+            self.updateDuration()
             if APU_INFO:
                 print >> sys.stderr, \
                     "Frame %d: APU pulse %d: divider %d, constant envelope %d, length counter halt %d, duty %d" % \
                     (self.apu.cpu.ppu.frame, self.channelID,
                      self.envelopeDivider, self.constantEnvelope, self.lengthCounterHalt, self.duty)
         elif register == 1: # Sweep unit
-            self.sweepReload = True
+            self.sweepReload = True # This may not do anything right now
             self.sweepShift = (val & PULSE_SWEEP_SHIFT_MASK) >> PULSE_SWEEP_SHIFT_OFFSET
             self.sweepNegate = bool(val & PULSE_SWEEP_NEGATE_MASK)
             self.sweepPeriod = 1 + ((val & PULSE_SWEEP_PERIOD_MASK) >> PULSE_SWEEP_PERIOD_OFFSET)
             self.sweepEnable = bool(val & PULSE_SWEEP_ENABLE_MASK)
+            self.apu.capu.updatePulseSweep(self.channelID, self.sweepEnable,
+                                           self.sweepPeriod, self.sweepShift,
+                                           int(self.sweepNegate))
             if APU_INFO:
                 if self.sweepEnable:
                     print >> sys.stderr, \
@@ -206,6 +223,7 @@ class PulseChannel(object):
             if self.enabled:
                 lengthCounterIndex = (val & PULSE_LC_LOAD_MASK) >> PULSE_LC_LOAD_OFFSET
                 self.lengthCounter = PULSE_LC_TABLE[lengthCounterIndex]
+                self.updateDuration()
                 # As a side effect, this restarts the envelope and
                 # resets the phase.
                 self.apu.capu.resetPulse(self.channelID)
@@ -230,6 +248,17 @@ class PulseChannel(object):
                        self.timer, freq_string, self.lengthCounter, duration)
         else:
             raise RuntimeError("Unrecognized pulse channel register")
+
+    def updateDuration(self):
+        # TODO: Fix to more accurately reflect NES behavior. This sets
+        # a duration, but there should actually be a length counter
+        # that counts down unless lengthCounterHalt is set.
+        if self.lengthCounterHalt:
+            duration = -1.0 # infinite duration
+        else:
+            duration = self.lengthCounter * self.apu.frameDuration() / 2.0
+        self.apu.capu.setPulseDuration(self.channelID, duration)
+
 
 class APU(object):
 

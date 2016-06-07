@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 #include "portaudio.h"
 
@@ -15,7 +16,7 @@ const double SAMPLE_RATE = 44100.0;
 
 class APU {
 public:
-  APU(double);
+  APU(double sampleRate);
   ~APU();
   void apuInit();
   float tick();
@@ -23,12 +24,16 @@ public:
   void setPulseDivider(unsigned int, unsigned int);
   void setPulseEnabled(unsigned int, bool);
   void setPulseDuty(unsigned int, float);
+  void setPulseDuration(unsigned int, float);
+  void updatePulseSweep(unsigned int pulse_n,
+                        bool enabled, unsigned int divider,
+                        unsigned int shift, bool negate);
   // TODO more interface functions
 
   float lastSample;
 
 protected:
-  PulseWave pulses[N_PULSE_WAVES];
+  std::vector<PulseWave> pulses;
   double time;
   double sampleRate;
   double timeStep;
