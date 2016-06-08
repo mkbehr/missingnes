@@ -638,7 +638,11 @@ unsigned char Screen::pollKeys() {
   // Currently, we're polling events here and in draw(). Is that a
   // problem? Not sure.
   glfwPollEvents();
-  // TODO check to make sure we've set GLFW_STICKY_KEYS
+
+  if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+    exit(0);
+  }
+
   unsigned char out = 0;
   if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
     out |= KEY_MASK_A;
