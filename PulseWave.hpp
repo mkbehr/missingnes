@@ -16,7 +16,7 @@ const float MINIMUM_PERIOD = ((7.5 + 2) * PERIOD_INCREMENT);
 const unsigned int MINIMUM_DIVIDER = 8;
 const unsigned int MAXIMUM_DIVIDER = 0x7ff;
 
-const double TIME_PRECISION = 1e-8;
+const float TIME_PRECISION = 1e-8;
 
 const unsigned char ENVELOPE_MAX = 0xf;
 
@@ -24,7 +24,7 @@ class PulseWave {
 
 public:
 
-  PulseWave(double sampleRate);
+  PulseWave(float sampleRate);
   void reset();
   void setDivider(unsigned int divider);
   void setDuty(float duty);
@@ -44,18 +44,16 @@ public:
 
 protected:
 
-  // TODO these should probably all be floats
+  float frameCounterPeriod();
 
-  double frameCounterPeriod();
-
-  double period();
-  double sweepPeriod();
+  float period();
+  float sweepPeriod();
   void sweepAct();
   float envelopePeriod();
   void envelopeAct();
   float envelope();
 
-  const double sampleRate;
+  const float sampleRate;
 
   unsigned int divider;
   float duty;
@@ -70,7 +68,7 @@ protected:
   float envelopeLastActed;
   unsigned char envelopeCounter;
 
-  double sweepLastActed;
+  float sweepLastActed;
   bool sweepEnabled;
   unsigned int sweepDivider;
   unsigned int sweepShift;

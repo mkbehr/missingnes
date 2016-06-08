@@ -12,11 +12,11 @@
 const int N_PULSE_WAVES = 2;
 const int N_SOURCES = 2;
 
-const double SAMPLE_RATE = 44100.0;
+const float SAMPLE_RATE = 44100.0;
 
 class APU {
 public:
-  APU(double sampleRate);
+  APU(float sampleRate);
   ~APU();
   void apuInit();
   float tick();
@@ -37,9 +37,9 @@ public:
 
 protected:
   std::vector<PulseWave> pulses;
-  double time;
-  double sampleRate;
-  double timeStep;
+  float time;
+  float sampleRate;
+  float timeStep;
 
   PaStream *stream;
 };

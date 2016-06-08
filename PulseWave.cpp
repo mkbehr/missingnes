@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdio>
 
-PulseWave::PulseWave(double sampleRate)
+PulseWave::PulseWave(float sampleRate)
   : divider(0), duty(0.0), enabled(0), time(0.0),
     sweepLastActed(0.0), sweepEnabled(0), sweepDivider(0), sweepShift(0),
     duration(-1.0),
@@ -60,16 +60,16 @@ void PulseWave::updateEnvelope(bool loop, bool constant,
   envelopeTimerReload = timerReload;
 }
 
-double PulseWave::frameCounterPeriod() {
+float PulseWave::frameCounterPeriod() {
   // TODO account for 4-step vs. 5-step modes
   return 18641.0 / (CPU_FREQUENCY / 2.0);
 }
 
-double PulseWave::period() {
+float PulseWave::period() {
   return (divider + 2) * PERIOD_INCREMENT;
 }
 
-double PulseWave::sweepPeriod() {
+float PulseWave::sweepPeriod() {
   // sweep unit is clocked twice per frame-counter period
   return (sweepDivider + 1) * frameCounterPeriod() / 2.0;
 }
@@ -130,7 +130,7 @@ float PulseWave::tick()
   if (envelopePeriod() - (time - envelopeLastActed) <= TIME_PRECISION) {
     envelopeAct();
   }
-  double prd = period();
+  float prd = period();
   float phase = fmod(((time - (0.125 * prd)) / prd), 1.0);
   if (phase < 0.0) {
     phase += 1.0;

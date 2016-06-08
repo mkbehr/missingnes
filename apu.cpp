@@ -27,7 +27,7 @@ static int apuCallback (const void *inputBuffer, void *outputBuffer,
   return 0;
 }
 
-APU::APU(double sampleRate)
+APU::APU(float sampleRate)
   : time(0), sampleRate(sampleRate), timeStep(1.0/sampleRate),
     pulses(std::vector<PulseWave>(2, PulseWave(SAMPLE_RATE)))
 {
@@ -78,65 +78,29 @@ float APU::tick(void) {
 }
 
 void APU::resetPulse(unsigned int pulse_n) {
-  if (pulse_n >= N_PULSE_WAVES) {
-    throw std::range_error(
-      std::string("resetPulse: bad pulse channel: ") +
-      std::to_string(pulse_n));
-    exit(1);
-  }
-  pulses[pulse_n].reset();
+  pulses.at(pulse_n).reset();
 }
 
 void APU::setPulseDivider(unsigned int pulse_n, unsigned int divider) {
-  if (pulse_n >= N_PULSE_WAVES) {
-    throw std::range_error(
-      std::string("setPulseDivider: bad pulse channel: ") +
-      std::to_string(pulse_n));
-    exit(1);
-  }
-  pulses[pulse_n].setDivider(divider);
+  pulses.at(pulse_n).setDivider(divider);
 }
 
 void APU::setPulseEnabled(unsigned int pulse_n, bool enabled) {
-  if (pulse_n >= N_PULSE_WAVES) {
-    throw std::range_error(
-      std::string("setPulseEnabled: bad pulse channel: ")
-      + std::to_string(pulse_n));
-    exit(1);
-  }
-  pulses[pulse_n].setEnabled(enabled);
+  pulses.at(pulse_n).setEnabled(enabled);
 }
 
 void APU::setPulseDuty(unsigned int pulse_n, float duty) {
-  if (pulse_n >= N_PULSE_WAVES) {
-    throw std::range_error(
-      std::string("setPulseDuty: bad pulse channel: ") +
-      std::to_string(pulse_n));
-    exit(1);
-  }
-  pulses[pulse_n].setDuty(duty);
+  pulses.at(pulse_n).setDuty(duty);
 }
 
 void APU::setPulseDuration(unsigned int pulse_n, float duration) {
-  if (pulse_n >= N_PULSE_WAVES) {
-    throw std::range_error(
-      std::string("setPulseDuration: bad pulse channel: ") +
-      std::to_string(pulse_n));
-    exit(1);
-  }
-  pulses[pulse_n].setDuration(duration);
+  pulses.at(pulse_n).setDuration(duration);
 }
 
 void APU::updatePulseSweep(unsigned int pulse_n,
                            bool enabled, unsigned int divider,
                            unsigned int shift, bool negate) {
-  if (pulse_n >= N_PULSE_WAVES) {
-    throw std::range_error(
-      std::string("updatePulseSweep: bad pulse channel: ") +
-      std::to_string(pulse_n));
-    exit(1);
-  }
-  pulses[pulse_n].updateSweep(enabled, divider, shift, negate);
+  pulses.at(pulse_n).updateSweep(enabled, divider, shift, negate);
 }
 
 void APU::updatePulseEnvelope(unsigned int pulse_n,
