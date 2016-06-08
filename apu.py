@@ -97,6 +97,9 @@ class CAPU(object):
         libapu.ex_updatePulseSweep.argtypes = \
         [c_void_p, c_uint, c_ubyte, c_uint, c_uint, c_ubyte]
 
+        libapu.ex_updatePulseEnvelope.argtypes = \
+        [c_void_p, c_uint, c_ubyte, c_ubyte, c_ubyte]
+
         self.libapu = libapu
 
         self.apu_p = libapu.ex_initAPU()
@@ -119,6 +122,10 @@ class CAPU(object):
     def updatePulseSweep(self, pulse_n, enabled, divider, shift, negate):
         self.libapu.ex_updatePulseSweep(self.apu_p, pulse_n,
                                         enabled, divider, shift, negate)
+
+    def updatePulseEnvelope(self, pulse_n, loop, constant, timerReload):
+        self.libapu.ex_updatePulseEnvelope(self.apu_p, pulse_n,
+                                           loop, constant, timerReload)
 
 
 class PulseChannel(object):
@@ -179,6 +186,7 @@ class PulseChannel(object):
             dutyFloat = PULSE_DUTY_TABLE[self.duty]
             self.apu.capu.setPulseDuty(self.channelID, dutyFloat)
             self.updateDuration()
+            self.updateEnvelope()
             if APU_INFO:
                 print >> sys.stderr, \
                     "Frame %d: APU pulse %d: divider %d, constant envelope %d, length counter halt %d, duty %d" % \
@@ -259,6 +267,13 @@ class PulseChannel(object):
             duration = self.lengthCounter * self.apu.frameDuration() / 2.0
         self.apu.capu.setPulseDuration(self.channelID, duration)
 
+    def updateEnvelope(self):
+        # Note: the envelope loop flag is the same as the length counter halt flag.
+        self.apu.capu.updatePulseEnvelope(self.channelID,
+                                          int(self.lengthCounterHalt),
+                                          int(self.constantEnvelope),
+                                          self.envelopeDivider)
+
 
 class APU(object):
 
@@ -280,6 +295,8 @@ class APU(object):
         elif address == APU_FRAME_COUNTER:
             self.fcMode = (ord(val) & FRAME_COUNTER_MODE_MASK) >> FRAME_COUNTER_MODE_OFFSET
             self.fcIRQInhibit = not bool(ord(val) & FRAME_COUNTER_IRQ_INHIBIT_MASK)
+            # TODO: currently fcIRQInhibit doesn't actually do
+            # anything. Fix that.
             if APU_FRAME_COUNTER_WARN:
                 print >> sys.stderr, \
                     "Frame %d: ignoring APU frame counter write: 0b%s" % \

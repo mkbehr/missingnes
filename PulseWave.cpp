@@ -4,16 +4,20 @@
 #include <cstdio>
 
 PulseWave::PulseWave(double sampleRate)
-  : divider(0), duty(0.0), enabled(0), envelope(1.0), time(0.0),
+  : divider(0), duty(0.0), enabled(0), time(0.0),
     sweepLastActed(0.0), sweepEnabled(0), sweepDivider(0), sweepShift(0),
     duration(-1.0),
+    envelopeCounter(ENVELOPE_MAX), envelopeLoop(0), envelopeConstant(1),
+    envelopeTimerReload(ENVELOPE_MAX),
     sampleRate(sampleRate)
 {
 }
 
 void PulseWave::reset(void) {
   time = 0.0;
-  envelope = 1.0;
+  sweepLastActed = 0.0;
+  envelopeLastActed = 0.0;
+  envelopeCounter = ENVELOPE_MAX;
 }
 
 void PulseWave::setDivider(unsigned int d) {
@@ -46,7 +50,15 @@ void PulseWave::sweepReset() {
   // Note: resetting the sweep unit does not reset the divider.
 }
 
-// TODO: sweep-setting functions
+void PulseWave::updateEnvelope(bool loop, bool constant,
+                               unsigned char timerReload) {
+  // Note: this does not reset the envelope. reset() does that, which
+  // is called by writing to 0x4003 or 0x4007 (length counter load,
+  // timer high bits)
+  envelopeLoop = loop;
+  envelopeConstant = constant;
+  envelopeTimerReload = timerReload;
+}
 
 double PulseWave::frameCounterPeriod() {
   // TODO account for 4-step vs. 5-step modes
@@ -64,30 +76,50 @@ double PulseWave::sweepPeriod() {
 
 void PulseWave::sweepAct() {
   sweepLastActed += sweepPeriod();
-    if (sweepEnabled) {
-      int dividerDelta = divider >> sweepShift;
-      // TODO: If the divider would go outside [MINIMUM_DIVIDER,
-      // MAXIMUM_DIVIDER], this should actually silence the channel
-      // but leave the divider unchanged. Uh, it also may be that we
-      // silence the channel before actually ticking, but as soon as
-      // we see that on our /next/ tick we will go outside the range.
-      if (sweepNegate) {
-        // TODO: If we are pulse channel 1, then we are actually
-        // adding the one's complement instead of the two's
-        // complement, so subtract one from dividerDelta. (But what
-        // happens if dividerDelta is zero - are we actually
-        // increasing the divider then???)
+  if (sweepEnabled) {
+    int dividerDelta = divider >> sweepShift;
+    // TODO: If the divider would go outside [MINIMUM_DIVIDER,
+    // MAXIMUM_DIVIDER], this should actually silence the channel
+    // but leave the divider unchanged. Uh, it also may be that we
+    // silence the channel before actually ticking, but as soon as
+    // we see that on our /next/ tick we will go outside the range.
+    if (sweepNegate) {
+      // TODO: If we are pulse channel 1, then we are actually
+      // adding the one's complement instead of the two's
+      // complement, so subtract one from dividerDelta. (But what
+      // happens if dividerDelta is zero - are we actually
+      // increasing the divider then???)
 
-        // dividerDelta <= divider, so this will never underflow
-        divider -= dividerDelta;
-      } else {
-        // not the correct check (divider should actually never exceed
-        // MAXIMUM_DIVIDER), but prevents overflow
-        if (divider <= MAXIMUM_DIVIDER) {
-          divider += dividerDelta;
-        }
+      // dividerDelta <= divider, so this will never underflow
+      divider -= dividerDelta;
+    } else {
+      // not the correct check (divider should actually never exceed
+      // MAXIMUM_DIVIDER), but prevents overflow
+      if (divider <= MAXIMUM_DIVIDER) {
+        divider += dividerDelta;
       }
     }
+  }
+}
+
+float PulseWave::envelopePeriod() {
+  // envelope is clocked four times per frame-counter period
+  return (envelopeTimerReload + 1) * frameCounterPeriod() / 4.0;
+}
+
+void PulseWave::envelopeAct() {
+  envelopeLastActed += envelopePeriod();
+  if (envelopeCounter > 0) {
+    envelopeCounter--;
+  } else if (envelopeLoop) {
+    envelopeCounter = ENVELOPE_MAX;
+  }
+}
+
+float PulseWave::envelope() {
+  unsigned char envelope_n =
+    envelopeConstant ? envelopeTimerReload : envelopeCounter;
+  return ((float) envelope_n) / ((float) ENVELOPE_MAX);
 }
 
 float PulseWave::tick()
@@ -95,12 +127,15 @@ float PulseWave::tick()
   if (sweepPeriod() - (time - sweepLastActed) <= TIME_PRECISION) {
     sweepAct();
   }
+  if (envelopePeriod() - (time - envelopeLastActed) <= TIME_PRECISION) {
+    envelopeAct();
+  }
   double prd = period();
   float phase = fmod(((time - (0.125 * prd)) / prd), 1.0);
   if (phase < 0.0) {
     phase += 1.0;
   }
-  float out = (phase < duty) ? envelope : 0.0;
+  float out = (phase < duty) ? envelope() : 0.0;
   if ((divider < MINIMUM_DIVIDER) || (divider > MAXIMUM_DIVIDER)) {
     out = 0.0;
   }

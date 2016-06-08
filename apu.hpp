@@ -28,6 +28,9 @@ public:
   void updatePulseSweep(unsigned int pulse_n,
                         bool enabled, unsigned int divider,
                         unsigned int shift, bool negate);
+  void updatePulseEnvelope(unsigned int pulse_n,
+                           bool loop, bool constant,
+                           unsigned char timerReload);
   // TODO more interface functions
 
   float lastSample;

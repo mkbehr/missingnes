@@ -139,6 +139,12 @@ void APU::updatePulseSweep(unsigned int pulse_n,
   pulses[pulse_n].updateSweep(enabled, divider, shift, negate);
 }
 
+void APU::updatePulseEnvelope(unsigned int pulse_n,
+                              bool loop, bool constant,
+                              unsigned char timerReload) {
+  pulses.at(pulse_n).updateEnvelope(loop, constant, timerReload);
+}
+
 // ctypes interface
 
 extern "C" {
@@ -177,4 +183,9 @@ extern "C" {
                           shift, (bool) negate);
   }
 
+  void ex_updatePulseEnvelope(APU *apu, unsigned int pulse_n,
+                              unsigned char loop, unsigned char constant,
+                              unsigned char timerReload) {
+    apu->updatePulseEnvelope(pulse_n, (bool) loop, (bool) constant, timerReload);
+  }
 }

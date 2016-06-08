@@ -18,6 +18,8 @@ const unsigned int MAXIMUM_DIVIDER = 0x7ff;
 
 const double TIME_PRECISION = 1e-8;
 
+const unsigned char ENVELOPE_MAX = 0xf;
+
 class PulseWave {
 
 public:
@@ -33,6 +35,9 @@ public:
                    unsigned int shift, bool negate);
   void sweepReset();
 
+  void updateEnvelope(bool loop, bool constant,
+                      unsigned char timerReload);
+
   float tick();
 
   void printState(void);
@@ -46,15 +51,24 @@ protected:
   double period();
   double sweepPeriod();
   void sweepAct();
+  float envelopePeriod();
+  void envelopeAct();
+  float envelope();
 
   const double sampleRate;
 
   unsigned int divider;
   float duty;
-  float envelope;
   bool enabled;
   float time;
   float duration;
+
+  bool envelopeLoop;
+  bool envelopeConstant;
+  // Note: the timer reload also specifies the envelope in constant mode
+  unsigned char envelopeTimerReload;
+  float envelopeLastActed;
+  unsigned char envelopeCounter;
 
   double sweepLastActed;
   bool sweepEnabled;
