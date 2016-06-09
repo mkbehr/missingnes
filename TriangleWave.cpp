@@ -42,18 +42,18 @@ void TriangleWave::setLengthCounter(unsigned int c) {
   lengthCounterValue = c;
 }
 
-float TriangleWave::envelope() {
+unsigned char TriangleWave::envelope() {
   // Envelope has a 32-element sequence: it counts down from 15 to 0,
   // then up from 0 to 15
-  unsigned char envelope_n;
+  unsigned char out;
   if (sequenceIndex < 16) {
-    envelope_n = 15 - sequenceIndex;
+    out = 15 - sequenceIndex;
   } else {
-    envelope_n = sequenceIndex - 16;
+    out = sequenceIndex - 16;
   }
-  assert((envelope_n >= 0) &&
-         (envelope_n <= ENVELOPE_MAX));
-  return ((float) envelope_n) / ((float) ENVELOPE_MAX);
+  assert((out >= 0) &&
+         (out <= ENVELOPE_MAX));
+  return out;
 }
 
 void TriangleWave::updateFrameCounter(bool mode) {
@@ -143,7 +143,7 @@ bool TriangleWave::silent() {
            (divider < TRIANGLE_MINIMUM_DIVIDER));
 }
 
-float TriangleWave::tick() {
+unsigned char TriangleWave::tick() {
   if (linearCounterPeriod() - (time - linearCounterLastActed)
       <= TIME_PRECISION) {
     linearCounterAct();
@@ -156,7 +156,7 @@ float TriangleWave::tick() {
       <= TIME_PRECISION) {
     sequencerAct();
   }
-  float out = envelope();
+  unsigned char out = envelope();
   time += 1.0 / sampleRate;
   return out;
 }

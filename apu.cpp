@@ -67,14 +67,21 @@ void APU::apuInit(void) {
 }
 
 // Computes one sample. Returns the sample, and also stores it in the
-// lastSample member. Automatically advances the stored time.
+// lastSample member. Automatically advances the stored time. Mixes
+// sources using a linear approximation of the NES's mixer. Returns a
+// value between 0.0 and 1.0, so that zero outputs match (and there's
+// no popping sound on startup and shutdown). Does not currently
+// simulate the high-pass and low-pass filters that the NES appliles
+// after DAC conversion.
 float APU::tick(void) {
   float out = 0.0;
+  // Using linear approximation for mixing: see
+  // http://wiki.nesdev.com/w/index.php/APU_Mixer
   for (int pulse_i = 0; pulse_i < N_PULSE_WAVES; pulse_i++) {
-    out += pulses[pulse_i].tick();
+    out += pulses[pulse_i].tick() * PULSE_MIX_COEFFICIENT;
   }
-  out += triangle.tick();
-  out /= N_SOURCES;
+  out += triangle.tick() * TRIANGLE_MIX_COEFFICIENT;
+  //out = (out * 2.0) - 1.0;
   lastSample = out;
   time += timeStep;
   return out;

@@ -11,9 +11,13 @@
 #include "TriangleWave.hpp"
 
 const int N_PULSE_WAVES = 2;
-const int N_SOURCES = 3; // currently: pulse x2, triangle
 
 const float SAMPLE_RATE = 44100.0;
+
+const float PULSE_MIX_COEFFICIENT = 0.00752;
+const float TRIANGLE_MIX_COEFFICIENT = 0.00851;
+const float NOISE_MIX_COEFFICIENT = 0.00494;
+const float DMC_MIX_COEFFICIENT = 0.00335;
 
 class APU {
 public:

@@ -1,5 +1,6 @@
 #include "PulseWave.hpp"
 
+#include <cassert>
 #include <cmath>
 #include <cstdio>
 
@@ -118,10 +119,12 @@ void PulseWave::envelopeAct() {
   }
 }
 
-float PulseWave::envelope() {
-  unsigned char envelope_n =
-    envelopeConstant ? envelopeTimerReload : envelopeCounter;
-  return ((float) envelope_n) / ((float) ENVELOPE_MAX);
+unsigned char PulseWave::envelope() {
+  unsigned char out = envelopeConstant ?
+    envelopeTimerReload : envelopeCounter;
+  assert((out >= 0) &&
+         (out <= ENVELOPE_MAX));
+  return out;
 }
 
 void PulseWave::updateFrameCounter(bool mode) {
@@ -140,7 +143,7 @@ void PulseWave::updateFrameCounter(bool mode) {
   }
 }
 
-float PulseWave::tick()
+unsigned char PulseWave::tick()
 {
   if (sweepPeriod() - (time - sweepLastActed) <= TIME_PRECISION) {
     sweepAct();
@@ -155,13 +158,13 @@ float PulseWave::tick()
   }
   float out = (phase < duty) ? envelope() : 0.0;
   if ((divider < PULSE_MINIMUM_DIVIDER) || (divider > PULSE_MAXIMUM_DIVIDER)) {
-    out = 0.0;
+    out = 0;
   }
   if (!enabled) {
-    out = 0.0;
+    out = 0;
   }
   if ((duration >= 0) && (time >= duration)) {
-    out = 0.0;
+    out = 0;
   }
   time += 1.0 / sampleRate;
   return out;

@@ -22,7 +22,7 @@ public:
 
   void updateFrameCounter(bool mode);
 
-  float tick();
+  unsigned char tick();
 
 protected:
   const float sampleRate;
@@ -55,7 +55,7 @@ protected:
 
   bool silent();
 
-  float envelope();
+  unsigned char envelope();
 
   bool frameCounterMode;
 };

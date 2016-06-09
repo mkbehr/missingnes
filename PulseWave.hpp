@@ -32,7 +32,7 @@ public:
 
   void updateFrameCounter(bool mode);
 
-  float tick();
+  unsigned char tick();
 
   void printState(void);
 
@@ -45,7 +45,7 @@ protected:
   void sweepAct();
   float envelopePeriod();
   void envelopeAct();
-  float envelope();
+  unsigned char envelope();
 
   const float sampleRate;
 

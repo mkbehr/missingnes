@@ -48,7 +48,7 @@ static int patestCallback( const void *inputBuffer, void *outputBuffer,
     {
       *out++ = data->out;
       *out++ = data->out;
-      data->out = pulse.tick();
+      data->out = pulse.tick() / 15.0;
       data->t += ((double)1.0/(double)SAMPLE_RATE);
     }
     return 0;
