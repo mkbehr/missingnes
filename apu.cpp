@@ -29,7 +29,8 @@ static int apuCallback (const void *inputBuffer, void *outputBuffer,
 
 APU::APU(float sampleRate)
   : time(0), sampleRate(sampleRate), timeStep(1.0/sampleRate),
-    pulses(std::vector<PulseWave>(2, PulseWave(SAMPLE_RATE)))
+    pulses(std::vector<PulseWave>(2, PulseWave(sampleRate))),
+    triangle(TriangleWave(sampleRate))
 {
 }
 
@@ -71,6 +72,7 @@ float APU::tick(void) {
   for (int pulse_i = 0; pulse_i < N_PULSE_WAVES; pulse_i++) {
     out += pulses[pulse_i].tick();
   }
+  out += triangle.tick();
   out /= N_SOURCES;
   lastSample = out;
   time += timeStep;
@@ -119,6 +121,8 @@ extern "C" {
     return out;
   }
 
+  // pulse wave interface
+
   void ex_resetPulse(APU *apu, unsigned int pulse_n) {
     apu->resetPulse(pulse_n);
   }
@@ -151,5 +155,32 @@ extern "C" {
                               unsigned char loop, unsigned char constant,
                               unsigned char timerReload) {
     apu->updatePulseEnvelope(pulse_n, (bool) loop, (bool) constant, timerReload);
+  }
+
+
+  // triangle wave interface
+
+  void ex_setTriangleEnabled(APU *apu, unsigned char enabled) {
+    apu->triangle.setEnabled((bool) enabled);
+  }
+
+  void ex_setTriangleDivider(APU *apu, unsigned int divider) {
+    apu->triangle.setDivider(divider);
+  }
+
+  void ex_setTriangleLinearCounterInit(APU *apu, unsigned int c) {
+    apu->triangle.setLinearCounterInit(c);
+  }
+
+  void ex_setTriangleTimerHalts(APU *apu, unsigned char halt) {
+    apu->triangle.setTimerHalts((bool) halt);
+  }
+
+  void ex_setTriangleLengthCounter(APU *apu, unsigned int c) {
+    apu->triangle.setLengthCounter(c);
+  }
+
+  void ex_triangleLinearCounterReload(APU *apu) {
+    apu->triangle.linearCounterReload();
   }
 }

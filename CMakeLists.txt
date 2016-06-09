@@ -51,9 +51,11 @@ target_link_libraries(pulsetest
   pulsewave
   ${PORTAUDIO_LIBRARIES})
 
+add_library(trianglewave TriangleWave.cpp)
+
 add_library(apu MODULE apu.cpp)
-add_dependencies(apu pulsewave)
+add_dependencies(apu pulsewave trianglewave)
 target_link_libraries(apu
-  pulsewave
+  pulsewave trianglewave
   ${CoreFoundation_FRAMEWORK} ${CoreAudio_FRAMEWORK} ${CoreMIDI_FRAMEWORK}
   ${PORTAUDIO_LIBRARIES})

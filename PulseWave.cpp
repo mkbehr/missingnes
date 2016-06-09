@@ -66,7 +66,7 @@ float PulseWave::frameCounterPeriod() {
 }
 
 float PulseWave::period() {
-  return (divider + 2) * PERIOD_INCREMENT;
+  return (divider + 2) * PULSE_PERIOD_INCREMENT;
 }
 
 float PulseWave::sweepPeriod() {
@@ -95,7 +95,7 @@ void PulseWave::sweepAct() {
     } else {
       // not the correct check (divider should actually never exceed
       // MAXIMUM_DIVIDER), but prevents overflow
-      if (divider <= MAXIMUM_DIVIDER) {
+      if (divider <= PULSE_MAXIMUM_DIVIDER) {
         divider += dividerDelta;
       }
     }
@@ -136,7 +136,7 @@ float PulseWave::tick()
     phase += 1.0;
   }
   float out = (phase < duty) ? envelope() : 0.0;
-  if ((divider < MINIMUM_DIVIDER) || (divider > MAXIMUM_DIVIDER)) {
+  if ((divider < PULSE_MINIMUM_DIVIDER) || (divider > PULSE_MAXIMUM_DIVIDER)) {
     out = 0.0;
   }
   if (!enabled) {

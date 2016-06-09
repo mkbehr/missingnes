@@ -8,9 +8,10 @@
 #include "portaudio.h"
 
 #include "PulseWave.hpp"
+#include "TriangleWave.hpp"
 
 const int N_PULSE_WAVES = 2;
-const int N_SOURCES = 2;
+const int N_SOURCES = 3; // currently: pulse x2, triangle
 
 const float SAMPLE_RATE = 44100.0;
 
@@ -20,6 +21,7 @@ public:
   ~APU();
   void apuInit();
   float tick();
+  // pulse wave interface
   void resetPulse(unsigned int);
   void setPulseDivider(unsigned int, unsigned int);
   void setPulseEnabled(unsigned int, bool);
@@ -31,12 +33,13 @@ public:
   void updatePulseEnvelope(unsigned int pulse_n,
                            bool loop, bool constant,
                            unsigned char timerReload);
-  // TODO more interface functions
 
   float lastSample;
 
-protected:
   std::vector<PulseWave> pulses;
+  TriangleWave triangle;
+
+protected:
   float time;
   float sampleRate;
   float timeStep;

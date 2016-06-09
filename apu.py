@@ -65,6 +65,21 @@ PULSE_LC_TABLE = [10, 254, 20, 2,
                   192, 24, 72, 26,
                   16, 28, 32, 30]
 
+TRIANGLE_LINEAR_COUNTER_MASK = 0x7f
+TRIANGLE_COUNTER_HALT_MASK = 0x80
+
+TRIANGLE_LENGTH_COUNTER_TABLE = PULSE_LC_TABLE
+
+TRIANGLE_TIMER_LOW_VALUE_MASK = 0xff
+TRIANGLE_TIMER_HIGH_VALUE_MASK = 0x700
+TRIANGLE_TIMER_HIGH_VALUE_OFFSET = 8
+
+TRIANGLE_TIMER_HIGH_INPUT_MASK = 0x7
+TRIANGLE_LC_LOAD_MASK = 0xf8
+TRIANGLE_LC_LOAD_OFFSET = 3
+
+TRIANGLE_LC_TABLE = PULSE_LC_TABLE
+
 CPU_FREQUENCY = 1.789773e6
 CPU_CYCLES_PER_WAVEFORM_CYCLE = 16
 
@@ -79,26 +94,37 @@ class CAPU(object):
 
         libapu.ex_initAPU.restype = c_void_p
 
+        # pulse wave interface
+
         libapu.ex_resetPulse.argtypes = \
         [c_void_p, c_uint]
-
         libapu.ex_setPulseDivider.argtypes = \
         [c_void_p, c_uint, c_uint]
-
         libapu.ex_setPulseEnabled.argtypes = \
         [c_void_p, c_uint, c_ubyte]
-
         libapu.ex_setPulseDuty.argtypes = \
         [c_void_p, c_uint, c_float]
-
         libapu.ex_setPulseDuration.argtypes = \
         [c_void_p, c_uint, c_float]
-
         libapu.ex_updatePulseSweep.argtypes = \
         [c_void_p, c_uint, c_ubyte, c_uint, c_uint, c_ubyte]
-
         libapu.ex_updatePulseEnvelope.argtypes = \
         [c_void_p, c_uint, c_ubyte, c_ubyte, c_ubyte]
+
+        # triangle wave interface
+
+        libapu.ex_setTriangleEnabled.argtypes = \
+        [c_void_p, c_ubyte]
+        libapu.ex_setTriangleDivider.argtypes = \
+        [c_void_p, c_uint]
+        libapu.ex_setTriangleLinearCounterInit.argtypes = \
+        [c_void_p, c_uint]
+        libapu.ex_setTriangleTimerHalts.argtypes = \
+        [c_void_p, c_ubyte]
+        libapu.ex_setTriangleLengthCounter.argtypes = \
+        [c_void_p, c_uint]
+        libapu.ex_triangleLinearCounterReload.argtypes = \
+        [c_void_p]
 
         self.libapu = libapu
 
@@ -126,6 +152,25 @@ class CAPU(object):
     def updatePulseEnvelope(self, pulse_n, loop, constant, timerReload):
         self.libapu.ex_updatePulseEnvelope(self.apu_p, pulse_n,
                                            loop, constant, timerReload)
+
+    def setTriangleEnabled(self, e):
+        self.libapu.ex_setTriangleEnabled(self.apu_p, e)
+
+    def setTriangleDivider(self, d):
+        self.libapu.ex_setTriangleDivider(self.apu_p, d)
+
+    def setTriangleLinearCounterInit(self, c):
+        self.libapu.ex_setTriangleLinearCounterInit(self.apu_p, c)
+
+    def setTriangleTimerHalts(self, h):
+        self.libapu.ex_setTriangleTimerHalts(self.apu_p, h)
+
+    def setTriangleLengthCounter(self, c):
+        self.libapu.ex_setTriangleLengthCounter(self.apu_p, c)
+
+    def triangleLinearCounterReload(self):
+        self.libapu.ex_triangleLinearCounterReload(self.apu_p)
+
 
 
 class PulseChannel(object):
@@ -236,7 +281,6 @@ class PulseChannel(object):
                 # resets the phase.
                 self.apu.capu.resetPulse(self.channelID)
             if APU_INFO:
-                # not printing length counter info for now
                 if self.timer < 8:
                     freq_string = "silent"
                 else:
@@ -274,6 +318,74 @@ class PulseChannel(object):
                                           int(self.constantEnvelope),
                                           self.envelopeDivider)
 
+class TriangleChannel(object):
+
+    def __init__(self, apu):
+        self.apu = apu
+        self.enabled = False
+        self.linearCounterInit = 0
+        self.countersHalt = False
+        self.timer = 0
+        self.lengthCounter = 0
+
+    def setEnabled(self, enabled):
+        self.enabled = enabled
+        self.apu.capu.setTriangleEnabled(enabled)
+
+    def write(self, register, val):
+        # register should be between 0 and 3 inclusive, and val should be an integer
+        if register == 0:
+            self.linearCounterInit = val & TRIANGLE_LINEAR_COUNTER_MASK
+            self.countersHalt = bool(val & TRIANGLE_COUNTER_HALT_MASK)
+            self.apu.capu.setTriangleLinearCounterInit(self.linearCounterInit)
+            self.apu.capu.setTriangleTimerHalts(int(self.countersHalt))
+            if APU_INFO:
+                print >> sys.stderr, \
+                    "Frame %d: APU triangle: linear counter load %d, counters halted %d" % \
+                    (self.apu.cpu.ppu.frame,
+                     self.linearCounterInit, self.countersHalt)
+        elif register == 1: # Does nothing
+            if APU_INFO:
+                print >> sys.stderr, \
+                    "Frame %d: Ignoring write to unused triangle channel register" \
+                    % self.apu.cpu.ppu.frame
+        elif register == 2:
+            self.timer = (self.timer & TRIANGLE_TIMER_HIGH_VALUE_MASK) + val
+            self.apu.capu.setTriangleDivider(self.timer)
+            if APU_INFO:
+                if self.timer < 2:
+                    freq_string = "silent"
+                else:
+                    freq_string = "%f Hz" % \
+                                  (CPU_FREQUENCY / (32 * (self.timer + 1)))
+                print >> sys.stderr, \
+                    "Frame %d: APU triangle timer %d after low bits (%s)" \
+                    % (self.apu.cpu.ppu.frame, self.timer, freq_string)
+        elif register == 3:
+            self.timer = (self.timer & TRIANGLE_TIMER_LOW_VALUE_MASK) + \
+                         ((val & TRIANGLE_TIMER_HIGH_INPUT_MASK) << TRIANGLE_TIMER_HIGH_VALUE_OFFSET)
+            self.apu.capu.setTriangleDivider(self.timer)
+            if self.enabled:
+                lengthCounterIndex = (val & TRIANGLE_LC_LOAD_MASK) >> TRIANGLE_LC_LOAD_OFFSET
+                self.lengthCounter = TRIANGLE_LC_TABLE[lengthCounterIndex]
+                self.apu.capu.setTriangleLengthCounter(self.lengthCounter)
+                # As a side effect, this reloads the linear counter.
+                self.apu.capu.triangleLinearCounterReload()
+            if APU_INFO:
+                if self.timer < 2:
+                    freq_string = "silent"
+                else:
+                    freq_string = "%f Hz" % \
+                                  (CPU_FREQUENCY / (32 * (self.timer + 1)))
+                duration = self.lengthCounter * self.apu.frameDuration() / 2.0
+                print >> sys.stderr, \
+                    "Frame %d: APU triangle timer %d after high bits (%s), length counter %d (%fs)" \
+                    % (self.apu.cpu.ppu.frame,
+                       self.timer, freq_string, self.lengthCounter, duration)
+
+        else:
+            raise RuntimeError("Unrecognized triangle channel register")
+
 
 class APU(object):
 
@@ -281,7 +393,7 @@ class APU(object):
         self.cpu = cpu
         self.pulse1 = PulseChannel(self, 0)
         self.pulse2 = PulseChannel(self, 1)
-        self.triangleEnabled = False
+        self.triangle = TriangleChannel(self)
         self.noiseEnabled = False
         self.dmcEnabled = False
         self.fcMode = 0
@@ -306,10 +418,7 @@ class APU(object):
         elif PULSE_2_BASE <= address < (PULSE_2_BASE + CHANNEL_ADDRESS_RANGE):
             self.pulse2.write(address - PULSE_2_BASE, ord(val))
         elif TRIANGLE_BASE <= address < (TRIANGLE_BASE + CHANNEL_ADDRESS_RANGE):
-            if APU_WARN:
-                print >> sys.stderr, \
-                    "Frame %d: ignoring write to APU triangle wave register 0x%04x: %02x" % \
-                    (self.cpu.ppu.frame, address, ord(val))
+            self.triangle.write(address - TRIANGLE_BASE, ord(val))
         elif NOISE_BASE <= address < (NOISE_BASE + CHANNEL_ADDRESS_RANGE):
             if APU_WARN:
                 print >> sys.stderr, \
@@ -332,7 +441,7 @@ class APU(object):
         # - Does whatever DMC logic it needs to do depending on the DMC bit
         self.pulse1.setEnabled(bool(statusByte & PULSE_1_STATUS_MASK))
         self.pulse2.setEnabled(bool(statusByte & PULSE_1_STATUS_MASK))
-        self.triangleEnabled = bool(statusByte & TRIANGLE_STATUS_MASK)
+        self.triangle.setEnabled(bool(statusByte & TRIANGLE_STATUS_MASK))
         self.noiseEnabled = bool(statusByte & NOISE_STATUS_MASK)
         self.dmcEnabled = bool(statusByte & DMC_STATUS_MASK)
         if APU_INFO:
@@ -341,7 +450,7 @@ class APU(object):
                 channels += ["pulse wave 1"]
             if self.pulse2.enabled:
                 channels += ["pulse wave 2"]
-            if self.triangleEnabled:
+            if self.triangle.enabled:
                 channels += ["triangle wave"]
             if self.noiseEnabled:
                 channels += ["noise"]
