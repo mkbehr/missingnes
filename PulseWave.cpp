@@ -125,10 +125,19 @@ float PulseWave::envelope() {
 }
 
 void PulseWave::updateFrameCounter(bool mode) {
-  // TODO: explicitly simulate the frame counter. This will then reset
-  // the frame counter timer, and cause a tick immediately if mode is
-  // true.
   frameCounterMode = mode;
+  // In 5-step mode, clock everything immediately. In 4-step mode,
+  // don't. (Not sure the 4-step mode behavior is exactly correct.)
+
+  // TODO: Make sure this is robust to timing errors; currently, we
+  // might tick in the middle of this.
+  if (mode) {
+    envelopeLastActed = time - envelopePeriod();
+    sweepLastActed = time - sweepPeriod();
+  } else {
+    envelopeLastActed = time;
+    sweepLastActed = time;
+  }
 }
 
 float PulseWave::tick()
