@@ -30,6 +30,8 @@ public:
   void updateEnvelope(bool loop, bool constant,
                       unsigned char timerReload);
 
+  void updateFrameCounter(bool mode);
+
   float tick();
 
   void printState(void);
@@ -65,6 +67,8 @@ protected:
   unsigned int sweepDivider;
   unsigned int sweepShift;
   bool sweepNegate;
+
+  bool frameCounterMode;
 
 };
 #endif

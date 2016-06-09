@@ -4,6 +4,8 @@
 #include "nesconstants.hpp"
 
 const int TRIANGLE_WAVE_SEQUENCE_LENGTH = 32;
+// start with output 0 so there's no popping sound
+const int TRIANGLE_WAVE_SEQUENCE_START = 15;
 
 const int TRIANGLE_MINIMUM_DIVIDER = 2;
 
@@ -17,6 +19,8 @@ public:
   void setTimerHalts(bool halt);
   void setLengthCounter(unsigned int c);
   void linearCounterReload();
+
+  void updateFrameCounter(bool mode);
 
   float tick();
 
@@ -52,6 +56,8 @@ protected:
   bool silent();
 
   float envelope();
+
+  bool frameCounterMode;
 };
 
 #endif

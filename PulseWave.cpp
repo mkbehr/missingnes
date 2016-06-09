@@ -6,7 +6,7 @@
 PulseWave::PulseWave(float sampleRate)
   : divider(0), duty(0.0), enabled(0), time(0.0),
     sweepLastActed(0.0), sweepEnabled(0), sweepDivider(0), sweepShift(0),
-    duration(-1.0),
+    duration(-1.0), frameCounterMode(0),
     envelopeCounter(ENVELOPE_MAX), envelopeLoop(0), envelopeConstant(1),
     envelopeTimerReload(ENVELOPE_MAX),
     sampleRate(sampleRate)
@@ -61,8 +61,10 @@ void PulseWave::updateEnvelope(bool loop, bool constant,
 }
 
 float PulseWave::frameCounterPeriod() {
-  // TODO account for 4-step vs. 5-step modes
-  return 18641.0 / (CPU_FREQUENCY / 2.0);
+  return (frameCounterMode ?
+          FRAME_COUNTER_5STEP_LENGTH :
+          FRAME_COUNTER_4STEP_LENGTH)
+    / (CPU_FREQUENCY / 2.0);
 }
 
 float PulseWave::period() {
@@ -120,6 +122,13 @@ float PulseWave::envelope() {
   unsigned char envelope_n =
     envelopeConstant ? envelopeTimerReload : envelopeCounter;
   return ((float) envelope_n) / ((float) ENVELOPE_MAX);
+}
+
+void PulseWave::updateFrameCounter(bool mode) {
+  // TODO: explicitly simulate the frame counter. This will then reset
+  // the frame counter timer, and cause a tick immediately if mode is
+  // true.
+  frameCounterMode = mode;
 }
 
 float PulseWave::tick()

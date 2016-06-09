@@ -21,6 +21,7 @@ public:
   ~APU();
   void apuInit();
   float tick();
+  void updateFrameCounter(bool);
   // pulse wave interface
   void resetPulse(unsigned int);
   void setPulseDivider(unsigned int, unsigned int);
@@ -43,6 +44,8 @@ protected:
   float time;
   float sampleRate;
   float timeStep;
+
+  bool frameCounterMode;
 
   PaStream *stream;
 };

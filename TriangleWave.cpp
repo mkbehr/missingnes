@@ -6,7 +6,9 @@
 
 // TODO make sure to initialize everything here
 TriangleWave::TriangleWave(float sampleRate)
-  : enabled(0), divider(0), sequenceIndex(0), time(0.0),
+  : enabled(0), divider(0),
+    sequenceIndex(TRIANGLE_WAVE_SEQUENCE_START),
+    time(0.0),
     linearCounterHalt(0), lengthCounterHalt(0),
     linearCounterInit(0), linearCounterValue(0),
     lengthCounterValue(0),
@@ -21,6 +23,7 @@ void TriangleWave::setEnabled(bool e) {
 }
 
 void TriangleWave::setDivider(unsigned int d) {
+  sequencerLastActed = time; // DEBUG
   divider = d;
 }
 
@@ -53,9 +56,29 @@ float TriangleWave::envelope() {
   return ((float) envelope_n) / ((float) ENVELOPE_MAX);
 }
 
+void TriangleWave::updateFrameCounter(bool mode) {
+  frameCounterMode = mode;
+  // In 5-step mode, clock everything immediately. In 4-step mode,
+  // don't. (Not sure the 4-step mode behavior is exactly correct.)
+
+  // TODO: Make sure this is robust to timing errors; currently, we
+  // might tick in the middle of this.
+  if (mode) {
+    linearCounterLastActed = time - linearCounterPeriod();
+    lengthCounterLastActed = time - lengthCounterPeriod();
+    sequencerLastActed = time - sequencerPeriod();
+  } else {
+    linearCounterLastActed = time;
+    lengthCounterLastActed = time;
+    sequencerLastActed = time;
+  }
+}
+
 float TriangleWave::frameCounterPeriod() {
-  // TODO account for 4-step vs. 5-step modes
-  return 18641.0 / (CPU_FREQUENCY / 2.0);
+  return (frameCounterMode ?
+          FRAME_COUNTER_5STEP_LENGTH :
+          FRAME_COUNTER_4STEP_LENGTH)
+    / (CPU_FREQUENCY / 2.0);
 }
 
 float TriangleWave::linearCounterPeriod() {

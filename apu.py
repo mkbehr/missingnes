@@ -9,6 +9,9 @@ APU_FRAME_COUNTER_WARN = False
 APU_WARN = False
 APU_INFO = False
 
+ENABLE_PULSE = True
+ENABLE_TRIANGLE = True
+
 APU_STATUS = 0x4015
 APU_FRAME_COUNTER = 0x4017
 
@@ -94,6 +97,9 @@ class CAPU(object):
 
         libapu.ex_initAPU.restype = c_void_p
 
+        libapu.ex_updateFrameCounter.argtypes = \
+        [c_void_p, c_ubyte]
+
         # pulse wave interface
 
         libapu.ex_resetPulse.argtypes = \
@@ -129,6 +135,9 @@ class CAPU(object):
         self.libapu = libapu
 
         self.apu_p = libapu.ex_initAPU()
+
+    def updateFrameCounter(self, mode):
+        self.libapu.ex_updateFrameCounter(self.apu_p, mode)
 
     def resetPulse(self, pulse_n):
         self.libapu.ex_resetPulse(self.apu_p, pulse_n)
@@ -211,7 +220,7 @@ class PulseChannel(object):
 
 
     def setEnabled(self, enabled):
-        self.enabled = enabled
+        self.enabled = enabled and ENABLE_PULSE
         if not enabled:
             self.lengthCounter = 0
             # TODO ensure that the channel is immediately silenced
@@ -329,7 +338,7 @@ class TriangleChannel(object):
         self.lengthCounter = 0
 
     def setEnabled(self, enabled):
-        self.enabled = enabled
+        self.enabled = enabled and ENABLE_TRIANGLE
         self.apu.capu.setTriangleEnabled(enabled)
 
     def write(self, register, val):
@@ -407,6 +416,7 @@ class APU(object):
         elif address == APU_FRAME_COUNTER:
             self.fcMode = (ord(val) & FRAME_COUNTER_MODE_MASK) >> FRAME_COUNTER_MODE_OFFSET
             self.fcIRQInhibit = not bool(ord(val) & FRAME_COUNTER_IRQ_INHIBIT_MASK)
+            self.capu.updateFrameCounter(self.fcMode)
             # TODO: currently fcIRQInhibit doesn't actually do
             # anything. Fix that.
             if APU_FRAME_COUNTER_WARN:

@@ -29,6 +29,7 @@ static int apuCallback (const void *inputBuffer, void *outputBuffer,
 
 APU::APU(float sampleRate)
   : time(0), sampleRate(sampleRate), timeStep(1.0/sampleRate),
+    frameCounterMode(0),
     pulses(std::vector<PulseWave>(2, PulseWave(sampleRate))),
     triangle(TriangleWave(sampleRate))
 {
@@ -79,6 +80,14 @@ float APU::tick(void) {
   return out;
 }
 
+void APU::updateFrameCounter(bool mode) {
+  frameCounterMode = mode;
+  for (int i = 0; i < N_PULSE_WAVES; i++) {
+    pulses.at(i).updateFrameCounter(mode);
+  }
+  triangle.updateFrameCounter(mode);
+}
+
 void APU::resetPulse(unsigned int pulse_n) {
   pulses.at(pulse_n).reset();
 }
@@ -119,6 +128,10 @@ extern "C" {
     APU *out = new APU(SAMPLE_RATE);
     out->apuInit();
     return out;
+  }
+
+  void ex_updateFrameCounter(APU *apu, unsigned char mode) {
+    apu->updateFrameCounter((bool) mode);
   }
 
   // pulse wave interface
