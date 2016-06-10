@@ -26,11 +26,15 @@ public:
   void apuInit();
   float tick();
   void updateFrameCounter(bool);
+  void frameCounterQuarterFrame();
+  void frameCounterHalfFrame();
   // pulse wave interface
   void resetPulse(unsigned int);
   void setPulseDivider(unsigned int, unsigned int);
   void setPulseEnabled(unsigned int, bool);
   void setPulseDuty(unsigned int, float);
+  void setPulseLengthCounterHalt(unsigned int, bool);
+  void setPulseLengthCounter(unsigned int, unsigned int);
   void setPulseDuration(unsigned int, float);
   void updatePulseSweep(unsigned int pulse_n,
                         bool enabled, unsigned int divider,

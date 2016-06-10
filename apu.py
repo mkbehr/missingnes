@@ -86,9 +86,41 @@ TRIANGLE_LC_TABLE = PULSE_LC_TABLE
 CPU_FREQUENCY = 1.789773e6
 CPU_CYCLES_PER_WAVEFORM_CYCLE = 16
 
-APU_FREQUENCY = CPU_FREQUENCY / 2.0
+APU_CPU_CYCLES_PER_FC_CYCLE = 2
+
+# lazy enum
+# note: each successive value implies the previous: e.g. an interrupt
+# will also generate a half and quarter cycle clock
+APU_FC_QUARTER_FRAME = 0
+APU_FC_HALF_FRAME = 1
+APU_FC_INTERRUPT = 2
+
+APU_4STEP_SEQUENCE = [
+    (int(3728.5 * APU_CPU_CYCLES_PER_FC_CYCLE),
+     APU_FC_QUARTER_FRAME),
+    (int(7456.5 * APU_CPU_CYCLES_PER_FC_CYCLE),
+     APU_FC_HALF_FRAME),
+    (int(11185.5 * APU_CPU_CYCLES_PER_FC_CYCLE),
+     APU_FC_QUARTER_FRAME),
+    # Technically, the interrupt flag is set from APU cycle 14914
+    # through cycle 14915, which will affect reads from 0x4015. I
+    # really don't care. (I really hope I don't care.)
+    (int(14914.5 * APU_CPU_CYCLES_PER_FC_CYCLE),
+     APU_FC_INTERRUPT)]
 APU_CYCLES_PER_4STEP_FRAME = 14915
+
+APU_5STEP_SEQUENCE = [
+    (int(3728.5 * APU_CPU_CYCLES_PER_FC_CYCLE),
+     APU_FC_QUARTER_FRAME),
+    (int(7456.5 * APU_CPU_CYCLES_PER_FC_CYCLE),
+     APU_FC_HALF_FRAME),
+    (int(11185.5 * APU_CPU_CYCLES_PER_FC_CYCLE),
+     APU_FC_QUARTER_FRAME),
+    (int(18640.5 * APU_CPU_CYCLES_PER_FC_CYCLE),
+     APU_FC_HALF_FRAME)]
 APU_CYCLES_PER_5STEP_FRAME = 18641
+
+APU_FREQUENCY = CPU_FREQUENCY / 2.0
 
 class CAPU(object):
 
@@ -99,6 +131,10 @@ class CAPU(object):
 
         libapu.ex_updateFrameCounter.argtypes = \
         [c_void_p, c_ubyte]
+        libapu.ex_frameCounterQuarterFrame.argtypes = \
+        [c_void_p]
+        libapu.ex_frameCounterHalfFrame.argtypes = \
+        [c_void_p]
 
         # pulse wave interface
 
@@ -110,8 +146,10 @@ class CAPU(object):
         [c_void_p, c_uint, c_ubyte]
         libapu.ex_setPulseDuty.argtypes = \
         [c_void_p, c_uint, c_float]
-        libapu.ex_setPulseDuration.argtypes = \
-        [c_void_p, c_uint, c_float]
+        libapu.ex_setPulseLengthCounterHalt.argtypes = \
+        [c_void_p, c_uint, c_ubyte]
+        libapu.ex_setPulseLengthCounter.argtypes = \
+        [c_void_p, c_uint, c_uint]
         libapu.ex_updatePulseSweep.argtypes = \
         [c_void_p, c_uint, c_ubyte, c_uint, c_uint, c_ubyte]
         libapu.ex_updatePulseEnvelope.argtypes = \
@@ -139,6 +177,12 @@ class CAPU(object):
     def updateFrameCounter(self, mode):
         self.libapu.ex_updateFrameCounter(self.apu_p, mode)
 
+    def frameCounterQuarterFrame(self):
+        self.libapu.ex_frameCounterQuarterFrame(self.apu_p)
+
+    def frameCounterHalfFrame(self):
+        self.libapu.ex_frameCounterHalfFrame(self.apu_p)
+
     def resetPulse(self, pulse_n):
         self.libapu.ex_resetPulse(self.apu_p, pulse_n)
 
@@ -151,8 +195,11 @@ class CAPU(object):
     def setPulseDuty(self, pulse_n, duty):
         self.libapu.ex_setPulseDuty(self.apu_p, pulse_n, duty)
 
-    def setPulseDuration(self, pulse_n, duration):
-        self.libapu.ex_setPulseDuration(self.apu_p, pulse_n, duration)
+    def setPulseLengthCounterHalt(self, pulse_n, h):
+        self.libapu.ex_setPulseLengthCounterHalt(self.apu_p, pulse_n, h)
+
+    def setPulseLengthCounter(self, pulse_n, c):
+        self.libapu.ex_setPulseLengthCounter(self.apu_p, pulse_n, c)
 
     def updatePulseSweep(self, pulse_n, enabled, divider, shift, negate):
         self.libapu.ex_updatePulseSweep(self.apu_p, pulse_n,
@@ -311,14 +358,8 @@ class PulseChannel(object):
             raise RuntimeError("Unrecognized pulse channel register")
 
     def updateDuration(self):
-        # TODO: Fix to more accurately reflect NES behavior. This sets
-        # a duration, but there should actually be a length counter
-        # that counts down unless lengthCounterHalt is set.
-        if self.lengthCounterHalt:
-            duration = -1.0 # infinite duration
-        else:
-            duration = self.lengthCounter * self.apu.frameDuration() / 2.0
-        self.apu.capu.setPulseDuration(self.channelID, duration)
+        self.apu.capu.setPulseLengthCounterHalt(self.channelID, int(self.lengthCounterHalt))
+        self.apu.capu.setPulseLengthCounter(self.channelID, self.lengthCounter)
 
     def updateEnvelope(self):
         # Note: the envelope loop flag is the same as the length counter halt flag.
@@ -407,6 +448,9 @@ class APU(object):
         self.dmcEnabled = False
         self.fcMode = 0
         self.fcIRQInhibit = False
+        self.fcSequenceIndex = 0
+        # set up the cpu's ppuCyclesUntilAction
+        self.fcSleep()
 
         self.capu = CAPU()
 
@@ -478,3 +522,43 @@ class APU(object):
             return APU_CYCLES_PER_4STEP_FRAME / APU_FREQUENCY
         else:
             return APU_CYCLES_PER_5STEP_FRAME / APU_FREQUENCY
+
+    def fcSequence(self):
+        if not self.fcMode:
+            return APU_4STEP_SEQUENCE
+        else:
+            return APU_5STEP_SEQUENCE
+
+    def frameCounterTick(self):
+        sequence = self.fcSequence()
+        (cycle, frameType) = sequence[self.fcSequenceIndex]
+        if frameType < APU_FC_HALF_FRAME:
+            self.capu.frameCounterQuarterFrame()
+        else:
+            # note: sending half frame also has effects of quarter frame
+            self.capu.frameCounterHalfFrame()
+        if (frameType == APU_FC_INTERRUPT) and not self.fcIRQInhibit:
+            # send interrupt
+            self.cpu.irqPending = True
+        self.fcSequenceIndex = (self.fcSequenceIndex + 1) % len(sequence)
+        self.fcSleep()
+
+
+    # Determine the number of CPU cycles it will take until the frame
+    # counter next acts, and tell the CPU what that number is.
+    def fcSleep(self):
+        sequence = self.fcSequence()
+        if self.fcSequenceIndex > 0:
+            c = (sequence[self.fcSequenceIndex][0] -
+                 sequence[self.fcSequenceIndex-1][0])
+        else:
+            if not self.fcMode:
+                frameLen = (APU_CYCLES_PER_4STEP_FRAME *
+                            APU_CPU_CYCLES_PER_FC_CYCLE)
+            else:
+                frameLen = (APU_CYCLES_PER_5STEP_FRAME *
+                            APU_CPU_CYCLES_PER_FC_CYCLE)
+            c = (sequence[self.fcSequenceIndex][0] -
+                 sequence[self.fcSequenceIndex-1][0] +
+                 frameLen)
+        self.cpu.apuCyclesUntilAction = c

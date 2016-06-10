@@ -59,6 +59,9 @@ class CPU(object):
         self.ppuCyclesUntilAction = 0
         self.ppuStoredCycles = 0
 
+        self.apuCyclesUntilAction = 0
+        self.apuStoredCycles = 0
+
         self.ppu = ppu.PPU(self)
         self.apu = apu.APU(self)
 
@@ -138,8 +141,14 @@ class CPU(object):
 
     def tick(self):
         self.ppuStoredCycles += self.excessCycles * 3
+        self.apuStoredCycles += self.excessCycles
         self.excessCycles = 0
         if self.ppuStoredCycles >= self.ppuCyclesUntilAction:
             self.ppuStoredCycles -= self.ppuCyclesUntilAction
+            # ppuTick sets ppuCyclesUntilAction
             self.ppu.ppuTick(self.ppuCyclesUntilAction)
+        if self.apuStoredCycles >= self.apuCyclesUntilAction:
+            self.apuStoredCycles -= self.apuCyclesUntilAction
+            # apuTick sets apuCyclesUntilAction
+            self.apu.frameCounterTick()
         self.cpuTick()

@@ -12,7 +12,6 @@ TriangleWave::TriangleWave(float sampleRate)
     linearCounterHalt(0), lengthCounterHalt(0),
     linearCounterInit(0), linearCounterValue(0),
     lengthCounterValue(0),
-    linearCounterLastActed(0.0), lengthCounterLastActed(0.0),
     sequencerLastActed(0.0),
     sampleRate(sampleRate)
 {
@@ -58,35 +57,18 @@ unsigned char TriangleWave::envelope() {
 
 void TriangleWave::updateFrameCounter(bool mode) {
   frameCounterMode = mode;
-  // In 5-step mode, clock everything immediately. In 4-step mode,
-  // don't. (Not sure the 4-step mode behavior is exactly correct.)
-
-  // TODO: Make sure this is robust to timing errors; currently, we
-  // might tick in the middle of this.
-  if (mode) {
-    linearCounterLastActed = time - linearCounterPeriod();
-    lengthCounterLastActed = time - lengthCounterPeriod();
-    sequencerLastActed = time - sequencerPeriod();
-  } else {
-    linearCounterLastActed = time;
-    lengthCounterLastActed = time;
-    sequencerLastActed = time;
-  }
 }
 
-float TriangleWave::frameCounterPeriod() {
-  return (frameCounterMode ?
-          FRAME_COUNTER_5STEP_LENGTH :
-          FRAME_COUNTER_4STEP_LENGTH)
-    / (CPU_FREQUENCY / 2.0);
+void TriangleWave::frameCounterQuarterFrame() {
+  linearCounterAct();
 }
 
-float TriangleWave::linearCounterPeriod() {
-  return frameCounterPeriod() / 4.0;
+void TriangleWave::frameCounterHalfFrame() {
+  linearCounterAct();
+  lengthCounterAct();
 }
 
 void TriangleWave::linearCounterAct() {
-  linearCounterLastActed += linearCounterPeriod();
   if ((!linearCounterHalt) && (linearCounterValue > 0)) {
     linearCounterValue--;
   }
@@ -104,12 +86,7 @@ void TriangleWave::linearCounterReload() {
   linearCounterValue = linearCounterInit + 1;
 }
 
-float TriangleWave::lengthCounterPeriod() {
-  return frameCounterPeriod() / 2.0;
-}
-
 void TriangleWave::lengthCounterAct() {
-  lengthCounterLastActed += lengthCounterPeriod();
   if ((!lengthCounterHalt) && (lengthCounterValue > 0)) {
     lengthCounterValue--;
   }
@@ -144,14 +121,6 @@ bool TriangleWave::silent() {
 }
 
 unsigned char TriangleWave::tick() {
-  if (linearCounterPeriod() - (time - linearCounterLastActed)
-      <= TIME_PRECISION) {
-    linearCounterAct();
-  }
-  if (lengthCounterPeriod() - (time - lengthCounterLastActed)
-      <= TIME_PRECISION) {
-    lengthCounterAct();
-  }
   if (sequencerPeriod() - (time - sequencerLastActed)
       <= TIME_PRECISION) {
     sequencerAct();

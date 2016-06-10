@@ -93,6 +93,25 @@ void APU::updateFrameCounter(bool mode) {
     pulses.at(i).updateFrameCounter(mode);
   }
   triangle.updateFrameCounter(mode);
+  if (mode) {
+    // Updating the frame counter with the mode bit set will
+    // immediately generate half-frame and quarter-frame clocks.
+    frameCounterHalfFrame();
+  }
+}
+
+void APU::frameCounterQuarterFrame() {
+  for (int i = 0; i < N_PULSE_WAVES; i++) {
+    pulses.at(i).frameCounterQuarterFrame();
+  }
+  triangle.frameCounterQuarterFrame();
+}
+
+void APU::frameCounterHalfFrame() {
+  for (int i = 0; i < N_PULSE_WAVES; i++) {
+    pulses.at(i).frameCounterHalfFrame();
+  }
+  triangle.frameCounterHalfFrame();
 }
 
 void APU::resetPulse(unsigned int pulse_n) {
@@ -111,8 +130,12 @@ void APU::setPulseDuty(unsigned int pulse_n, float duty) {
   pulses.at(pulse_n).setDuty(duty);
 }
 
-void APU::setPulseDuration(unsigned int pulse_n, float duration) {
-  pulses.at(pulse_n).setDuration(duration);
+void APU::setPulseLengthCounterHalt(unsigned int pulse_n, bool h) {
+  pulses.at(pulse_n).setLengthCounterHalt(h);
+}
+
+void APU::setPulseLengthCounter(unsigned int pulse_n, unsigned int c) {
+  pulses.at(pulse_n).setLengthCounter(c);
 }
 
 void APU::updatePulseSweep(unsigned int pulse_n,
@@ -141,6 +164,14 @@ extern "C" {
     apu->updateFrameCounter((bool) mode);
   }
 
+  void ex_frameCounterQuarterFrame(APU *apu) {
+    apu->frameCounterQuarterFrame();
+  }
+
+  void ex_frameCounterHalfFrame(APU *apu) {
+    apu->frameCounterHalfFrame();
+  }
+
   // pulse wave interface
 
   void ex_resetPulse(APU *apu, unsigned int pulse_n) {
@@ -159,8 +190,12 @@ extern "C" {
     apu->setPulseDuty(pulse_n, duty);
   }
 
-  void ex_setPulseDuration(APU *apu, unsigned int pulse_n, float duration) {
-    apu->setPulseDuration(pulse_n, duration);
+  void ex_setPulseLengthCounterHalt(APU *apu, unsigned int pulse_n, unsigned char halt) {
+    apu->setPulseLengthCounterHalt(pulse_n, (bool) halt);
+  }
+
+  void ex_setPulseLengthCounter(APU *apu, unsigned int pulse_n, unsigned int c) {
+    apu->setPulseLengthCounter(pulse_n, c);
   }
 
   void ex_updatePulseSweep(APU *apu, unsigned int pulse_n,

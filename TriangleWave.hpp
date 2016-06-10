@@ -21,6 +21,8 @@ public:
   void linearCounterReload();
 
   void updateFrameCounter(bool mode);
+  void frameCounterQuarterFrame();
+  void frameCounterHalfFrame();
 
   unsigned char tick();
 
@@ -40,17 +42,12 @@ protected:
   int linearCounterValue;
   int lengthCounterValue;
 
-  float frameCounterPeriod();
-  float linearCounterPeriod();
-  float lengthCounterPeriod();
   float sequencerPeriod();
 
   void linearCounterAct();
   void lengthCounterAct();
   void sequencerAct();
 
-  float linearCounterLastActed;
-  float lengthCounterLastActed;
   float sequencerLastActed;
 
   bool silent();

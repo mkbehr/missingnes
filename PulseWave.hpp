@@ -21,7 +21,8 @@ public:
   void setDivider(unsigned int divider);
   void setDuty(float duty);
   void setEnabled(bool);
-  void setDuration(float duration);
+  void setLengthCounterHalt(bool halt);
+  void setLengthCounter(unsigned int c);
 
   void updateSweep(bool enabled, unsigned int divider,
                    unsigned int shift, bool negate);
@@ -31,6 +32,8 @@ public:
                       unsigned char timerReload);
 
   void updateFrameCounter(bool mode);
+  void frameCounterQuarterFrame();
+  void frameCounterHalfFrame();
 
   unsigned char tick();
 
@@ -38,13 +41,10 @@ public:
 
 protected:
 
-  float frameCounterPeriod();
-
   float period();
-  float sweepPeriod();
   void sweepAct();
-  float envelopePeriod();
   void envelopeAct();
+  void lengthCounterAct();
   unsigned char envelope();
 
   const float sampleRate;
@@ -53,17 +53,19 @@ protected:
   float duty;
   bool enabled;
   float time;
-  float duration;
+
+  bool lengthCounterHalt;
+  int lengthCounterValue;
 
   bool envelopeLoop;
   bool envelopeConstant;
   // Note: the timer reload also specifies the envelope in constant mode
-  unsigned char envelopeTimerReload;
-  float envelopeLastActed;
+  unsigned char envelopeDividerReload;
+  unsigned char envelopeDivider;
   unsigned char envelopeCounter;
 
-  float sweepLastActed;
   bool sweepEnabled;
+  unsigned int sweepDividerReload;
   unsigned int sweepDivider;
   unsigned int sweepShift;
   bool sweepNegate;

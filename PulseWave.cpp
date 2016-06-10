@@ -6,18 +6,18 @@
 
 PulseWave::PulseWave(float sampleRate)
   : divider(0), duty(0.0), enabled(0), time(0.0),
-    sweepLastActed(0.0), sweepEnabled(0), sweepDivider(0), sweepShift(0),
-    duration(-1.0), frameCounterMode(0),
+    sweepEnabled(0), sweepDividerReload(0), sweepDivider(0), sweepShift(0),
+    lengthCounterValue(0), lengthCounterHalt(0), frameCounterMode(0),
     envelopeCounter(ENVELOPE_MAX), envelopeLoop(0), envelopeConstant(1),
-    envelopeTimerReload(ENVELOPE_MAX),
+    envelopeDivider(0), envelopeDividerReload(ENVELOPE_MAX),
     sampleRate(sampleRate)
 {
 }
 
 void PulseWave::reset(void) {
+  // reset phase, reload length conuter, reset envelope.
   time = 0.0;
-  sweepLastActed = 0.0;
-  envelopeLastActed = 0.0;
+  envelopeDivider = envelopeDividerReload;
   envelopeCounter = ENVELOPE_MAX;
 }
 
@@ -33,21 +33,25 @@ void PulseWave::setEnabled(bool e) {
   enabled = e;
 }
 
-void PulseWave::setDuration(float d) {
-  duration = d;
+void PulseWave::setLengthCounterHalt(bool h) {
+  lengthCounterHalt = h;
+}
+
+void PulseWave::setLengthCounter(unsigned int c) {
+  lengthCounterValue = c;
 }
 
 void PulseWave::updateSweep(bool _enabled, unsigned int _divider,
                             unsigned int _shift, bool _negate) {
   sweepEnabled = _enabled;
-  sweepDivider = _divider;
+  sweepDividerReload = _divider;
   sweepShift = _shift;
   sweepNegate = _negate;
   sweepReset();
 }
 
 void PulseWave::sweepReset() {
-  sweepLastActed = 0.0;
+  sweepDivider = sweepDividerReload;
   // Note: resetting the sweep unit does not reset the divider.
 }
 
@@ -58,27 +62,19 @@ void PulseWave::updateEnvelope(bool loop, bool constant,
   // timer high bits)
   envelopeLoop = loop;
   envelopeConstant = constant;
-  envelopeTimerReload = timerReload;
-}
-
-float PulseWave::frameCounterPeriod() {
-  return (frameCounterMode ?
-          FRAME_COUNTER_5STEP_LENGTH :
-          FRAME_COUNTER_4STEP_LENGTH)
-    / (CPU_FREQUENCY / 2.0);
+  envelopeDividerReload = timerReload;
 }
 
 float PulseWave::period() {
   return (divider + 2) * PULSE_PERIOD_INCREMENT;
 }
 
-float PulseWave::sweepPeriod() {
-  // sweep unit is clocked twice per frame-counter period
-  return (sweepDivider + 1) * frameCounterPeriod() / 2.0;
-}
-
 void PulseWave::sweepAct() {
-  sweepLastActed += sweepPeriod();
+  if (sweepDivider) {
+    sweepDivider--;
+    return;
+  }
+  sweepDivider = sweepDividerReload;
   if (sweepEnabled) {
     int dividerDelta = divider >> sweepShift;
     // TODO: If the divider would go outside [MINIMUM_DIVIDER,
@@ -105,13 +101,12 @@ void PulseWave::sweepAct() {
   }
 }
 
-float PulseWave::envelopePeriod() {
-  // envelope is clocked four times per frame-counter period
-  return (envelopeTimerReload + 1) * frameCounterPeriod() / 4.0;
-}
-
 void PulseWave::envelopeAct() {
-  envelopeLastActed += envelopePeriod();
+  if (envelopeDivider) {
+    envelopeDivider--;
+    return;
+  }
+  envelopeDivider = envelopeDividerReload;
   if (envelopeCounter > 0) {
     envelopeCounter--;
   } else if (envelopeLoop) {
@@ -121,36 +116,38 @@ void PulseWave::envelopeAct() {
 
 unsigned char PulseWave::envelope() {
   unsigned char out = envelopeConstant ?
-    envelopeTimerReload : envelopeCounter;
+    envelopeDividerReload : envelopeCounter;
   assert((out >= 0) &&
          (out <= ENVELOPE_MAX));
   return out;
 }
 
+void PulseWave::lengthCounterAct() {
+  if ((!lengthCounterHalt) && (lengthCounterValue > 0)) {
+    lengthCounterValue--;
+  }
+  if (!enabled) {
+    // TODO check to see whether this is exactly the right behavior
+    lengthCounterValue = 0;
+  }
+}
+
 void PulseWave::updateFrameCounter(bool mode) {
   frameCounterMode = mode;
-  // In 5-step mode, clock everything immediately. In 4-step mode,
-  // don't. (Not sure the 4-step mode behavior is exactly correct.)
+}
 
-  // TODO: Make sure this is robust to timing errors; currently, we
-  // might tick in the middle of this.
-  if (mode) {
-    envelopeLastActed = time - envelopePeriod();
-    sweepLastActed = time - sweepPeriod();
-  } else {
-    envelopeLastActed = time;
-    sweepLastActed = time;
-  }
+void PulseWave::frameCounterQuarterFrame() {
+  sweepAct();
+}
+
+void PulseWave::frameCounterHalfFrame() {
+  lengthCounterAct();
+  envelopeAct();
+  sweepAct();
 }
 
 unsigned char PulseWave::tick()
 {
-  if (sweepPeriod() - (time - sweepLastActed) <= TIME_PRECISION) {
-    sweepAct();
-  }
-  if (envelopePeriod() - (time - envelopeLastActed) <= TIME_PRECISION) {
-    envelopeAct();
-  }
   float prd = period();
   float phase = fmod(((time - (0.125 * prd)) / prd), 1.0);
   if (phase < 0.0) {
@@ -163,7 +160,7 @@ unsigned char PulseWave::tick()
   if (!enabled) {
     out = 0;
   }
-  if ((duration >= 0) && (time >= duration)) {
+  if (!lengthCounterValue) {
     out = 0;
   }
   time += 1.0 / sampleRate;
