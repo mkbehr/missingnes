@@ -405,6 +405,10 @@ void Screen::setOam(unsigned char *oamBytes) {
   memcpy(oam, oamBytes, OAM_SIZE);
 }
 
+void Screen::setMask(unsigned char m) {
+  maskState = m;
+}
+
 
 void Screen::drawToBuffer() {
   // State we need by the time we finish this:
@@ -431,7 +435,7 @@ void Screen::drawToBuffer() {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-  if (DRAW_BG) {
+  if (maskState & MASK_MASK_BKG) {
     glBindBuffer(GL_ARRAY_BUFFER, bgVbo);
 
     // From python implementation comments:
@@ -493,7 +497,7 @@ void Screen::drawToBuffer() {
     glDrawArrays(GL_TRIANGLES, 0, N_BG_VERTICES);
     checkGlErrors(0);
   }
-  if (DRAW_SPRITES) {
+  if (maskState & MASK_MASK_SPRITE) {
     glBindBuffer(GL_ARRAY_BUFFER, spriteVbo);
 
     glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE);
@@ -765,6 +769,10 @@ extern "C" {
 
   void ex_setOam(Screen *sc, unsigned char *oamBytes) {
     sc->setOam(oamBytes);
+  }
+
+  void ex_setMask(Screen *sc, unsigned char m) {
+    sc->setMask(m);
   }
 
   void ex_drawToBuffer(Screen *sc) {

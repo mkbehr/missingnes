@@ -39,7 +39,8 @@ LOCAL_PALETTES_LENGTH = 16*4
 # number of values (elements) per vertex in the vertex buffer
 VERTEX_ELTS = 7
 
-# TODO: read flags in game for whether or not to draw bg/sprites
+# Override flags for debugging: set these to false to disable the
+# background or sprite layer, respectively
 DRAW_BG = True
 DRAW_SPRITES = True
 
@@ -99,6 +100,9 @@ class CScreen(object):
         libscreen.ex_setOam.argtypes = \
         [c_void_p, c_ubyte * ppu.OAM_SIZE]
 
+        libscreen.ex_setMask.argtypes = \
+        [c_void_p, c_ubyte]
+
         libscreen.ex_draw.argtypes = [c_void_p]
         libscreen.ex_draw.restype = c_int
 
@@ -155,6 +159,9 @@ class CScreen(object):
         assert(len(oamBytes) == ppu.OAM_SIZE)
         c_oamBytes = (c_ubyte * ppu.OAM_SIZE) (*oamBytes)
         self.libscreen.ex_setOam(self.screen_p, c_oamBytes)
+
+    def setMask(self, m):
+        self.libscreen.ex_setMask(self.screen_p, m)
 
     def drawToBuffer(self):
         self.libscreen.ex_drawToBuffer(self.screen_p)
@@ -246,18 +253,22 @@ class Screen(object):
     def draw_to_buffer(self):
         self.cscreen.setUniversalBg(self.ppu.universalBg)
 
-        if DRAW_BG:
-            self.maintainBgPatternTable()
-            self.cscreen.setTileIndices(self.tileIndices)
-            self.cscreen.setPaletteIndices(self.paletteIndices)
-            localPaletteList = self.ppu.dumpLocalPalettes(ppu.BG_PALETTE_BASE)
-            self.cscreen.setBgPalettes(localPaletteList)
-        ## Now do sprites.
-        if DRAW_SPRITES:
-            self.maintainSpritePatternTable()
-            localPaletteList = self.ppu.dumpLocalPalettes(ppu.SPRITE_PALETTE_BASE)
-            self.cscreen.setSpritePalettes(localPaletteList)
-            self.cscreen.setOam([ord(x) for x in self.ppu.oam])
+        maskState = self.ppu.maskState
+        if not DRAW_BG:
+            maskState = maskState & ~(0x1 << 3)
+        if not DRAW_SPRITES:
+            maskState = maskState & ~(0x1 << 4)
+        self.cscreen.setMask(maskState)
+
+        self.maintainBgPatternTable()
+        self.cscreen.setTileIndices(self.tileIndices)
+        self.cscreen.setPaletteIndices(self.paletteIndices)
+        localPaletteList = self.ppu.dumpLocalPalettes(ppu.BG_PALETTE_BASE)
+        self.cscreen.setBgPalettes(localPaletteList)
+        self.maintainSpritePatternTable()
+        localPaletteList = self.ppu.dumpLocalPalettes(ppu.SPRITE_PALETTE_BASE)
+        self.cscreen.setSpritePalettes(localPaletteList)
+        self.cscreen.setOam([ord(x) for x in self.ppu.oam])
         self.cscreen.drawToBuffer()
 
     def maintainBgPatternTable(self):

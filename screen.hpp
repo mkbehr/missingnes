@@ -72,10 +72,6 @@ const GLenum BG_PATTERN_TABLE_TEXTURE = GL_TEXTURE0;
 const int BG_PATTERN_TABLE_TEXID = 0;
 const GLenum SPRITE_PATTERN_TABLE_TEXTURE = GL_TEXTURE1;
 const int SPRITE_PATTERN_TABLE_TEXID = 1;
-// TODO other texture ids go here
-
-const int DRAW_BG = 1;
-const int DRAW_SPRITES = 1;
 
 const int LOCAL_PALETTES_LENGTH = 16*4;
 
@@ -94,6 +90,15 @@ const unsigned char KEY_MASK_UP = 1<<4;
 const unsigned char KEY_MASK_DOWN = 1<<5;
 const unsigned char KEY_MASK_LEFT = 1<<6;
 const unsigned char KEY_MASK_RIGHT = 1<<7;
+
+const unsigned char MASK_MASK_GREYSCALE = 1<<0;
+const unsigned char MASK_MASK_BKG_LEFT = 1<<1;
+const unsigned char MASK_MASK_SPRITE_LEFT = 1<<2;
+const unsigned char MASK_MASK_BKG = 1<<3;
+const unsigned char MASK_MASK_SPRITE = 1<<4;
+const unsigned char MASK_MASK_EMPH_RED = 1<<5;
+const unsigned char MASK_MASK_EMPH_GREEN = 1<<6;
+const unsigned char MASK_MASK_EMPH_BLUE = 1<<7;
 
 const int DONKEY_KONG_BIG_HEAD_MODE = 0;
 const int DONKEY_KONG_BIG_HEAD_INCREASE = 16;
@@ -116,6 +121,7 @@ public:
   void setPaletteIndices(vector<vector<unsigned char> >);
   void setPaletteIndices(unsigned char *);
   void setOam(unsigned char *);
+  void setMask(unsigned char);
 
   void testRenderLoop();
   void drawToBuffer();
@@ -159,6 +165,8 @@ private:
   vector<struct glVertex> spriteVertices;
 
   float spritePalettes[LOCAL_PALETTES_LENGTH];
+
+  unsigned char maskState;
 
   // methods
 

@@ -81,14 +81,7 @@ class PPU(object):
         self.vblankNMI = 0
 
         ## PPUMASK flags
-        self.grayscale = 0
-        self.leftBkg = 0
-        self.leftSprites = 0
-        self.showBkg = 0
-        self.showSprites = 0
-        self.emphasizeRed = 0
-        self.emphasizeGreen = 0
-        self.emphasizeBlue = 0
+        self.maskState = 0
 
         ## PPUSTATUS flags
         self.spriteOverflow = 0
@@ -218,17 +211,21 @@ class PPU(object):
             if self.ppuMasterSlave:
                 raise RuntimeError("We set the PPU master/slave bit! That's bad!")
         elif register == REG_PPUMASK:
-            self.grayscale = val & 0x1 # bit 0
-            self.leftBkg = (val >> 1) & 0x1 # bit 1
-            self.leftSprites = (val >> 2) & 0x1 # bit 2
-            self.showBkg = (val >> 3) & 0x1 # bit 3
-            self.showSprites = (val >> 4) & 0x1 # bit 4
-            self.emphasizeRed = (val >> 5) & 0x1 # bit 5
-            self.emphasizeGreen = (val >> 6) & 0x1 # bit 6
-            self.emphasizeBlue = (val >> 7) & 0x1 # bit 7
-            if PPU_DEBUG and (self.emphasizeRed or self.emphasizeGreen or self.emphasizeBlue):
+            self.maskState = val
+            grayscale = val & 0x1 # bit 0
+            leftBkg = (val >> 1) & 0x1 # bit 1
+            leftSprites = (val >> 2) & 0x1 # bit 2
+            showBkg = (val >> 3) & 0x1 # bit 3
+            showSprites = (val >> 4) & 0x1 # bit 4
+            emphasizeRed = (val >> 5) & 0x1 # bit 5
+            emphasizeGreen = (val >> 6) & 0x1 # bit 6
+            emphasizeBlue = (val >> 7) & 0x1 # bit 7
+            if PPU_DEBUG and grayscale:
+                print >> sys.stderr, "PPUMASK write: ignoring grayscale"
+            if PPU_DEBUG and (leftBkg or leftSprites):
+                print >> sys.stderr, "PPUMASK write: ignoring left-column hiding"
+            if PPU_DEBUG and (emphasizeRed or emphasizeGreen or emphasizeBlue):
                 print >> sys.stderr, "PPUMASK write: ignoring color emphasis"
-            pass
         elif register == REG_PPUSTATUS:
             if PPU_DEBUG:
                 print >> sys.stderr, 'Warning: write to PPUSTATUS'
