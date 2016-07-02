@@ -69,28 +69,6 @@ def runUntilFrame(frame):
         instructions += 1
     print "Executed %d instructions." % instructions
 
-def showscreen(): # doesn't work under pypy
-    import numpy as np
-    from matplotlib import pyplot as plt
-    img = 3 - np.array(c.ppu.screen).T
-    fig = plt.imshow(img, interpolation='nearest', cmap='Greys')
-    plt.axis('off')
-    fig.axes.get_xaxis().set_visible(False)
-    fig.axes.get_yaxis().set_visible(False)
-    plt.savefig('screen.png', bbox_inches='tight', pad_inches = 0)
-    plt.show()
-
-def pillowscreen():
-    from PIL import Image
-    import numpy as np
-
-    # a bit hacky, but this works for now
-    nparray = np.array(c.ppu.screen, dtype='float').T
-    nparray /= nparray.max()
-    npint = np.uint8(nparray * 255)
-    img = Image.frombytes('L', nparray.T.shape, npint.tobytes())
-    img.show() 
-
 def instrTest():
     while c.mem.prgram[0] != '\x80':
         # ignore GPU for now to run faster
@@ -120,4 +98,4 @@ def reset():
     c.printState()
 
 if __name__ == "__main__":
-    run()        
+    run()

@@ -275,20 +275,3 @@ class Screen(object):
             patternTableFloats = [float(ord(x)) for x in self.spritePatternTable]
             self.cscreen.setSpritePatternTable(patternTableFloats)
             self.lastSpritePattern = self.ppu.spritePatternTableAddr
-
-    def pollKey(self, key):
-        return glfw.get_key(self.window, key) == glfw.PRESS
-
-class GPUThread(threading.Thread):
-    def __init__(self, window, gpuStart, gpuDone):
-        threading.Thread.__init__(self)
-        self.window = window
-        self.gpuStart = gpuStart
-        self.gpuDone = gpuDone
-
-    def run(self):
-        while True:
-            self.gpuStart.wait()
-            self.gpuStart.clear()
-            glfw.swap_buffers(self.window)
-            self.gpuDone.set()
