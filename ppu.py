@@ -3,7 +3,6 @@ import numpy as np
 
 import palette
 import ppucache
-import sprite
 
 DRAW_GRID = False
 
@@ -18,7 +17,18 @@ CYCLES_PER_FRAME = SCANLINES * CYCLES_PER_SCANLINE
 
 VBLANK_START = 241 * CYCLES_PER_SCANLINE + 1
 VBLANK_END = 261 * CYCLES_PER_SCANLINE + 1
+# DRAW_CYCLE corresponds to the end of the pre-render line, just
+# between vblank and actual drawing. It's not a state with special
+# meaning to the hardware; we just arbitrarily choose to do all our
+# drawing here. However, we'll need to change that, because there's no
+# one point in time where the PPU's state represents the entire frame.
+# We need to respect changes to certain parts of the state in the
+# middle of drawing the frame.
 DRAW_CYCLE = CYCLES_PER_FRAME - 1
+# If a sprite 0 hit could occur at pixel (0,0), the sprite 0 flag
+# would be raised at this cycle. (This isn't actually possible,
+# because sprites can't be drawn on the first scanline.)
+SPRITE0_CYCLE_OFFSET = 2
 
 REG_PPUCTRL = 0
 REG_PPUMASK = 1
@@ -282,7 +292,7 @@ class PPU(object):
         #
         # bits 8 through b are the tile row (row / 8)
         #
-        # bit c is the same as self.bgPatternTableAddr
+        # bit c is the same as self.bgPatternTableAddr (or spritePatternTableAddr)
         #
         # bits d through f are 0 (pattern tables go from 0000 to 1fff)
 
@@ -317,7 +327,6 @@ class PPU(object):
                 # background palette from the attribute table.
 
                 nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
-                # double-check this:
                 nametableEntry = nametable + tilecolumn + tilerow * 32
                 ptabTile = ord(self.cpu.mem.ppuRead(nametableEntry))
 
@@ -344,53 +353,6 @@ class PPU(object):
                 self.pgscreen.tileIndices[tilecolumn][tilerow] = ptabTile
                 self.pgscreen.paletteIndices[tilecolumn][tilerow] = paletteNumber
 
-    def updateSprites(self):
-        # TODO maybe this should just be done at vblank_end? Also should probably process background here too?
-        for sprite_i in range(OAM_SIZE / OAM_ENTRY_SIZE):
-            sprite_oam_base = sprite_i * OAM_ENTRY_SIZE
-            # The first byte of a sprite's entry is one less than
-            # its y-coordinate. (This does mean that sprites can
-            # never be drawn on scanline 0.)
-            spritetop = ord(self.oam[sprite_oam_base]) + 1
-            # TODO account for 8x16 sprites
-
-            # BEGIN caching code
-
-            # Ignoring things like sprite-per-scanline limits,
-            # just run the caching code on every sprite. (However,
-            # OAM is not read-only like sprites, so we'll need to
-            # process more of it here.)
-
-            tileIndex = ord(self.oam[sprite_oam_base+1])
-            attributes = ord(self.oam[sprite_oam_base+2])
-            spriteX = ord(self.oam[sprite_oam_base+3])
-            spritePalette = attributes & 0x3
-            horizontalMirror = bool(attributes & 0x40)
-            verticalMirror = bool(attributes & 0x80)
-
-            # TODO no magic numbers
-            paletteAddr = 0x3F11 + (spritePalette * 4)
-            paletteData = [ord(self.cpu.mem.ppuRead(paletteAddr)),
-                           ord(self.cpu.mem.ppuRead(paletteAddr+1)),
-                           ord(self.cpu.mem.ppuRead(paletteAddr+2))]
-
-            # spriteTex = self.cache.spriteTexture(
-            #     base = self.spritePatternTableAddr,
-            #     tile = tileIndex,
-            #     flipH = horizontalMirror,
-            #     flipV = verticalMirror,
-            #     paletteData = paletteData)
-            # TODO assign texture to tile
-
-            # self.pgscreen.spriteSprites[sprite_i]._set_texture(spriteTex)
-            # self.pgscreen.spriteSprites[sprite_i].x = spriteX
-            # self.pgscreen.spriteSprites[sprite_i].y = (VISIBLE_SCANLINES) - spritetop - 8
-            # END caching code
-
-            # TODO emulate sprite overflow, including batshit behavior documented
-            # here:
-            # http://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
-
     def vblankStart(self):
         self.vblank = 1
         if self.vblankNMI:
@@ -400,7 +362,6 @@ class PPU(object):
 
     def vblankEnd(self):
         self.vblank = 0
-        self.updateSprites()
         self.updateBgTiles()
         # It's possible that we're supposed to reset sprite 0 one
         # frame earlier, but I don't want to look up the details right
@@ -418,10 +379,18 @@ class PPU(object):
         # don't know exactly how often). This is the
         # "background hack".
         self.universalBg = ord(self.cpu.mem.ppuRead(0x3F00)) # TODO no magic numbers
+        sprite0hit = self.findSprite0Hit()
         if PPU_DEBUG:
             print "BEGIN PPU FRAME %d" % self.frame
         # TODO check the frame count for off-by-one errors
         self.pgscreen.tick(self.frame)
+        if sprite0hit < 0:
+            self.sleepUntil(VBLANK_START, self.vblankStart)
+        else:
+            self.sleepUntil(sprite0hit, self.flagSprite0Hit)
+
+    def flagSprite0Hit(self):
+        self.sprite0Hit = 1
         self.sleepUntil(VBLANK_START, self.vblankStart)
 
     def ppuTick(self, ticks):
@@ -442,10 +411,6 @@ class PPU(object):
                 self.ppuTick(nextTicks)
         else:
             self.cycle = (self.cycle + ticks) % CYCLES_PER_FRAME
-
-        # TODO check for sprite 0 hits somewhere
-        # if False:
-        #     self.sprite0hit = 1
 
         # TODO skip cycle 340 on scanline 239 on odd
         # frames... hahahaha no I don't care
@@ -506,3 +471,104 @@ class PPU(object):
             out[4*i:(4*i)+3] = [float(x)/255.0 for x in palette.palette(paletteIndex)] # rgb
             out[(4*i)+3] = 1.0 # alpha
         return out
+
+
+    # Find the cycle where a sprite 0 hit occurs this frame. If there
+    # will not be a sprite 0 hit, return -1.
+    def findSprite0Hit(self):
+        # Sprite 0 hits can only happen if both background and sprites
+        # are being rendered.
+        if not (self.maskState & ((1 << 3) | (1 << 4))):
+            if PPU_DEBUG:
+                print "No sprite 0 hit"
+            return -1
+
+        spritetop = ord(self.oam[0]) + 1
+        # TODO account for 8x16 sprites
+
+        if spritetop >= 0xf0:
+            # Sprite 0 is wholly off the screen; no sprite 0 hit
+            if PPU_DEBUG:
+                print "No sprite 0 hit"
+            return -1
+
+        tileIndex = ord(self.oam[1])
+        attributes = ord(self.oam[2])
+        spriteX = ord(self.oam[3])
+        horizontalMirror = bool(attributes & 0x40)
+        verticalMirror = bool(attributes & 0x80)
+        # Note: palette is irrelevant for sprite 0 hits
+
+        # fetch opacity patterns for sprite 0 and relevant bkg tiles
+
+        # Lazily load the sprite opacity: we need to read two bytes per row
+        spriteOpacity = [None for _ in xrange(8)]
+
+        def spriteOpaque(xoffset, yoffset):
+            # Load sprite opacity if necessary
+            if spriteOpacity[yoffset] is None:
+                lowbyte, highbyte = self.readPtab(self.spritePatternTableAddr,
+                                                  yoffset, tileIndex)
+                # We have two bits per pixel to represent color, but
+                # the pixel is opaque if either is set. We don't care
+                # which one here.
+                spriteOpacity[yoffset] = lowbyte | highbyte
+            # Now spriteOpacity[yoffset] is a byte whose bits
+            # represent pixel opacity: the most-significant bit
+            # represents the leftmost pixel in the row.
+            return bool(spriteOpacity[yoffset] & (0x80 >> xoffset))
+
+        # Same for background opacity, except that we potentially have
+        # four background tiles to read. This list is indexed first by
+        # horizontal tile (0 or 1) and then by vertical row.
+        bkgOpacity = [[None for _ in xrange(8*2)] for _ in xrange(2)]
+        bkgTopTile = spritetop // 8
+        bkgLeftTile = spriteX // 8
+        bkgTopPixel = bkgTopTile * 8
+        bkgLeftPixel = bkgLeftTile * 8
+
+        def bkgOpaque(x, y):
+            xoffset = x - bkgLeftPixel
+            yoffset = y - bkgTopPixel
+            if xoffset < 8:
+                tileColumnOffset = 0
+            else:
+                tileColumnOffset = 1
+
+            if bkgOpacity[tileColumnOffset][yoffset] is None:
+                tileColumn = bkgLeftTile + tileColumnOffset
+                if yoffset < 8:
+                    tileRow = bkgTopTile
+                else:
+                    tileRow = bkgTopTile + 1
+
+                nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
+                nametableEntry = nametable + tileColumn + tileRow * 32
+                # We could cache this read, but it probably doesn't matter much.
+                bkgTile = ord(self.cpu.mem.ppuRead(nametableEntry))
+
+                lowbyte, highbyte = self.readPtab(self.bgPatternTableAddr,
+                                                  yoffset % 8, bkgTile)
+                bkgOpacity[tileColumnOffset][yoffset] = lowbyte | highbyte
+            return bool(bkgOpacity[tileColumnOffset][yoffset]
+                        & (0x80 >> (xoffset % 8)))
+
+        # TODO account for 8x16 sprites
+        for xoffset in xrange(8):
+            x = xoffset + spriteX
+            for yoffset in xrange(8):
+                y = yoffset + spritetop
+                if (spriteOpaque(xoffset,yoffset) and
+                    bkgOpaque(x,y)):
+                    out = (x
+                           + (y * CYCLES_PER_SCANLINE)
+                           + SPRITE0_CYCLE_OFFSET)
+                    if PPU_DEBUG:
+                        print ("Sprite 0 hit at (%d,%d): PPU cycle %d" %
+                               (x, y, out))
+                    return out
+
+        # Didn't find a hit.
+        if PPU_DEBUG:
+            print "No sprite 0 hit"
+        return -1
