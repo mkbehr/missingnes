@@ -44,6 +44,8 @@ class Memory(object):
     def read(self, address):
         if 0x0 <= address < 0x2000:
             # Internal RAM from $0000 to $07FF; higher addresses here are mirrored
+            # if self.ram[address % 0x0800] == '\x03':
+            #     print hex(address)
             return self.ram[address % 0x0800]
         elif 0x2000 <= address < 0x4000:
             register = (address - 0x2000) % 8
@@ -78,6 +80,8 @@ class Memory(object):
             raise RuntimeError("Address out of range: %x" % address)
 
     def write(self, address, val):
+        if (address % 0x0800) == 0x75A:
+            val = 9 # DEBUG: this gives infinite lives in SMB
         if isinstance(val, int): # someday we will want to get rid of this chr/ord weirdness
             val = chr(val)
         # Lot of copy-pasting between here and read. Not sure how to

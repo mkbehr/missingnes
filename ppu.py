@@ -6,6 +6,10 @@ import ppucache
 
 FORCE_PPU_DEBUG = False
 
+# Force the sprite 0 hit to occur on a given cycle. Set to None to run
+# detection normally.
+# (Super Mario Bros. wants a hit at frame 10322.)
+FORCE_SPRITE0_CYCLE = 10322
 
 SCANLINES = 262
 VISIBLE_SCANLINES = 240
@@ -16,6 +20,7 @@ CYCLES_PER_FRAME = SCANLINES * CYCLES_PER_SCANLINE
 
 VBLANK_START = 241 * CYCLES_PER_SCANLINE + 1
 VBLANK_END = 261 * CYCLES_PER_SCANLINE + 1
+
 # DRAW_CYCLE corresponds to the end of the pre-render line, just
 # between vblank and actual drawing. It's not a state with special
 # meaning to the hardware; we just arbitrarily choose to do all our
@@ -24,6 +29,7 @@ VBLANK_END = 261 * CYCLES_PER_SCANLINE + 1
 # We need to respect changes to certain parts of the state in the
 # middle of drawing the frame.
 DRAW_CYCLE = CYCLES_PER_FRAME - 1
+
 # If a sprite 0 hit could occur at pixel (0,0), the sprite 0 flag
 # would be raised at this cycle. (This isn't actually possible,
 # because sprites can't be drawn on the first scanline.)
@@ -204,7 +210,11 @@ class PPU(object):
             oldNametableBase = self.nametableBase
             oldBgPatternTableAddr = self.bgPatternTableAddr
 
-            self.nametableBase = val & 0x3 # bits 0,1
+            # DEBUG
+            if 10000 < self.fineCycle() < 80000:
+                self.nametableBase = val & 0x3 # bits 0,1
+
+            # self.nametableBase = val & 0x3 # bits 0,1
             self.vramInc = (val >> 2) & 0x1 # bit 2
             self.spritePatternTableAddr = (val >> 3) & 0x1 # bit 3
             self.bgPatternTableAddr = (val >> 4) & 0x1 # bit 4
@@ -217,6 +227,12 @@ class PPU(object):
             if (self.nametableBase != oldNametableBase or
                 self.bgPatternTableAddr != oldBgPatternTableAddr):
                 self.flushBgCache()
+
+            if self.ppu_debug:
+                print "PPUCTRL (cycle %d): nametableBase = %d (%d)" % (
+                    self.fineCycle(),
+                    self.nametableBase,
+                    val & 0x3)
 
             if self.ppuMasterSlave:
                 raise RuntimeError("We set the PPU master/slave bit! That's bad!")
@@ -247,15 +263,22 @@ class PPU(object):
         elif register == REG_PPUSCROLL:
             # TODO once scrolling exists, this may affect cache
             if self.nextScroll == 0:
-                self.scrollX = val
+                # DEBUG
+                if 10000 < self.fineCycle() < 80000:
+                    self.scrollX = val
+                # self.scrollX = val
                 self.nextScroll = 1
                 if self.ppu_debug:
-                    print "PPUSCROLL: x = %d" % val
+                    print "PPUSCROLL (cycle %d): x = %d" % (
+                    self.fineCycle(),
+                    val)
             else:
                 self.scrollY = val
                 self.nextScroll = 0
                 if self.ppu_debug:
-                    print "PPUSCROLL: y = %d" % val
+                    print "PPUSCROLL (cycle %d): y = %d" % (
+                    self.fineCycle(),
+                    val)
         elif register == REG_PPUADDR:
             if self.nextAddr == 0:
                 # addresses past $3fff are mirrored down
@@ -315,6 +338,8 @@ class PPU(object):
         return (lowbyte,highbyte)
 
     def updateBgTiles(self):
+        # print "Updating BG tiles: scroll (%d, %d) base %d" % (
+        #     self.scrollX, self.scrollY, self.nametableBase) # DEBUG
         for tilecolumn in range(VISIBLE_COLUMNS/8):
             for tilerow in range(VISIBLE_SCANLINES/8):
                 ## BACKGROUND
@@ -331,14 +356,25 @@ class PPU(object):
                 # background palette from the attribute table.
 
                 nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
-                nametableEntry = nametable + tilecolumn + tilerow * 32
+                scrolledcolumn = tilecolumn + (self.scrollX // 8)
+                scrolledrow = tilerow + (self.scrollY // 8)
+                nametableEntry = (nametable
+                                  + (scrolledcolumn % 32)
+                                  + (scrolledcolumn // 32) * 0x400
+                                  + 32 * ((scrolledrow % 30)
+                                          + (scrolledrow // 30) * 0x800))
                 ptabTile = ord(self.cpu.mem.ppuRead(nametableEntry))
 
                 # TODO don't use magic numbers
-                attributeRow = tilerow / 4 # rely on truncating down here
-                attributeColumn = tilecolumn / 4
+                attributeRow = scrolledrow // 4
+                attributeColumn = scrolledcolumn // 4
                 attributeTable = nametable + 0x3C0
-                attributeTableEntry = attributeTable + attributeColumn + attributeRow * 8
+                attributeTableEntry = (attributeTable
+                                       + (attributeColumn % 8)
+                                       + (attributeColumn // 8) * 0x400
+                                       + 8 * ((attributeRow % 8)
+                                               + (attributeRow // 8) * 0x800))
+                # attributeTable + attributeColumn + attributeRow * 8
                 attributeTile = ord(self.cpu.mem.ppuRead(attributeTableEntry))
 
                 # The attributeTile byte divides the 32x32 tile into
@@ -347,9 +383,9 @@ class PPU(object):
                 # the top-right, bits 4-5 are the bottom-left, and
                 # bits 6-7 are the bottom-right.
                 paletteOffset = 0
-                if (tilecolumn % 4) >= 2:
+                if (scrolledcolumn % 4) >= 2:
                     paletteOffset += 1*2
-                if (tilerow % 4) >= 2:
+                if (scrolledrow % 4) >= 2:
                     paletteOffset += 2*2
 
                 paletteNumber = (attributeTile >> paletteOffset) & 0x3
@@ -431,6 +467,11 @@ class PPU(object):
         self.cpu.ppuCyclesUntilAction = cycle - self.cycle
         assert (self.cpu.ppuCyclesUntilAction >= 0)
 
+    def fineCycle(self):
+        # Return the current cycle number, taking into account the
+        # number of cycles tracked by the CPU.
+        return self.cycle + self.cpu.ppuStoredCycles
+
     def flushBgCache(self):
         # Clear our background tile cache: we'll redraw the whole
         # background next frame. Currently this does nothing.
@@ -486,6 +527,9 @@ class PPU(object):
     # Find the cycle where a sprite 0 hit occurs this frame. If there
     # will not be a sprite 0 hit, return -1.
     def findSprite0Hit(self):
+        if FORCE_SPRITE0_CYCLE is not None:
+            return FORCE_SPRITE0_CYCLE
+
         # Sprite 0 hits can only happen if both background and sprites
         # are being rendered.
         if not (self.maskState & ((1 << 3) | (1 << 4))):
