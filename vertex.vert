@@ -4,9 +4,11 @@ in vec2 xy;
 in float x_high;
 in vec3 v_tuv;
 in float v_palette_n; // Why are these floats? I don't know, but it works.
+in float v_debug_highlight;
 
 out vec2 f_uv;
 out vec4[4] f_palette;
+out float f_debug_highlight;
 
 uniform vec4[16] localPalettes;
 
@@ -18,4 +20,5 @@ void main()
   for (int i = 0; i < 4; i++) {
     f_palette[i] = localPalettes[i + int(v_palette_n)*4];
   }
+  f_debug_highlight = v_debug_highlight;
 }

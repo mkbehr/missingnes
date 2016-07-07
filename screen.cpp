@@ -252,6 +252,7 @@ void Screen::initShaders(void) {
   xHighAttrib = safeGetAttribLocation(shader, "x_high");
   tuvAttrib = safeGetAttribLocation(shader, "v_tuv");
   paletteNAttrib = safeGetAttribLocation(shader, "v_palette_n");
+  debugHighlightAttrib = safeGetAttribLocation(shader, "v_debug_highlight");
 }
 
 void Screen::initBgVertices(void) {
@@ -269,22 +270,23 @@ void Screen::initBgVertices(void) {
       unsigned char v_bottom = 1;
       unsigned char v_top = 0;
       unsigned char palette_index = 0; // this will change
+      unsigned char debug_highlight = 0;
 
       int vertex_index =
         (x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
 
       struct glVertex bottomLeft =
         {x_left, y_bottom, x_left_high,
-         tile, u_left, v_bottom, palette_index};
+         tile, u_left, v_bottom, palette_index, debug_highlight};
       struct glVertex bottomRight =
         {x_right, y_bottom, x_right_high,
-         tile, u_right, v_bottom, palette_index};
+         tile, u_right, v_bottom, palette_index, debug_highlight};
       struct glVertex topLeft =
         {x_left, y_top, x_left_high,
-         tile, u_left, v_top, palette_index};
+         tile, u_left, v_top, palette_index, debug_highlight};
       struct glVertex topRight =
         {x_right, y_top, x_right_high,
-         tile, u_right, v_top, palette_index};
+         tile, u_right, v_top, palette_index, debug_highlight};
 
       // represent square as two triangles
       // first triangle
@@ -484,6 +486,10 @@ void Screen::drawToBuffer() {
                           (const GLvoid *) offsetof(struct glVertex, palette));
     glEnableVertexAttribArray(paletteNAttrib);
     checkGlErrors(0);
+    glVertexAttribPointer(debugHighlightAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+                          (const GLvoid *) offsetof(struct glVertex, debug_highlight));
+    glEnableVertexAttribArray(debugHighlightAttrib);
+    checkGlErrors(0);
 
     glUniform1i(glGetUniformLocation(shader, "patternTable"),
                 BG_PATTERN_TABLE_TEXID);
@@ -539,6 +545,14 @@ void Screen::drawToBuffer() {
       unsigned char tile = sprite.tile;
       unsigned char palette_index = (sprite.attributes & OAM_PALETTE);
 
+      unsigned char debug_highlight = 0;
+
+      /* BEGIN DEBUG sprite 0 */
+      if (oam_i == 0) {
+        debug_highlight = 1;
+      }
+      /* END DEBUG sprite 0 */
+
       if (DONKEY_KONG_BIG_HEAD_MODE) {
         // The main head tiles seem to be the even-numbered tiles in
         // the first 4 rows of 16 tiles each. (There are more for
@@ -568,16 +582,16 @@ void Screen::drawToBuffer() {
 
       struct glVertex bottomLeft =
         {x_left, y_bottom, x_left_high,
-         tile, u_left, v_bottom, palette_index};
+         tile, u_left, v_bottom, palette_index, debug_highlight};
       struct glVertex bottomRight =
         {x_right, y_bottom, x_right_high,
-         tile, u_right, v_bottom, palette_index};
+         tile, u_right, v_bottom, palette_index, debug_highlight};
       struct glVertex topLeft =
         {x_left, y_top, x_left_high,
-         tile, u_left, v_top, palette_index};
+         tile, u_left, v_top, palette_index, debug_highlight};
       struct glVertex topRight =
         {x_right, y_top, x_right_high,
-         tile, u_right, v_top, palette_index};
+         tile, u_right, v_top, palette_index, debug_highlight};
 
       // first triangle
       spriteVertices.push_back(bottomLeft);
@@ -610,6 +624,10 @@ void Screen::drawToBuffer() {
     glVertexAttribPointer(paletteNAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
                           (const GLvoid *) offsetof(struct glVertex, palette));
     glEnableVertexAttribArray(paletteNAttrib);
+    checkGlErrors(0);
+    glVertexAttribPointer(debugHighlightAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+                          (const GLvoid *) offsetof(struct glVertex, debug_highlight));
+    glEnableVertexAttribArray(debugHighlightAttrib);
     checkGlErrors(0);
 
     glUniform1i(glGetUniformLocation(shader, "patternTable"),

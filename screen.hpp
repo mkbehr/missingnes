@@ -15,10 +15,8 @@ struct glVertex {
   unsigned char u;
   unsigned char v;
   unsigned char palette;
+  unsigned char debug_highlight;
 };
-// this may not be necessary now that we can just define a struct
-const int VERTEX_ELTS = sizeof(struct glVertex);
-static_assert(sizeof(struct glVertex) == 7, "glVertex struct has wrong size");
 
 struct oamEntry {
   unsigned char y_minus_one;
@@ -137,6 +135,7 @@ private:
   GLint xHighAttrib;
   GLint tuvAttrib;
   GLint paletteNAttrib;
+  GLint debugHighlightAttrib;
 
   // buffers
   GLuint bgVbo;
