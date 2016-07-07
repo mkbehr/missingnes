@@ -436,6 +436,18 @@ class TriangleChannel(object):
         else:
             raise RuntimeError("Unrecognized triangle channel register")
 
+class DummyCAPU(object):
+    """A dummy object: represents every method a CAPU object could have,
+    but none of them do anything.
+
+    """
+
+    # Just let any attribute of this object be successfully looked up,
+    # but always return a no-op function
+    def __getattr__(self, name):
+        def nop(*args):
+            pass
+        return nop
 
 class APU(object):
 
@@ -452,7 +464,10 @@ class APU(object):
         # set up the cpu's ppuCyclesUntilAction
         self.fcSleep()
 
-        self.capu = CAPU()
+        if cpu.audioEnabled:
+            self.capu = CAPU()
+        else:
+            self.capu = DummyCAPU()
 
     def write(self, address, val):
         if address == APU_STATUS:

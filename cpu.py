@@ -20,9 +20,13 @@ FLAG_N = 0x80 # negative result
 
 class CPU(object):
 
-    def __init__(self, prgrom, chrrom, mapper=0):
+    def __init__(self, prgrom, chrrom, mapper=0,
+                 audioEnabled = True):
         """Sets up an initial CPU state loading from the given ROM. Simulates
         the reset signal."""
+
+        self.audioEnabled = audioEnabled
+
         # see http://wiki.nesdev.com/w/index.php/CPU_power_up_state
         # for some initial values
         self.prgrom = prgrom
