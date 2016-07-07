@@ -4,9 +4,8 @@ import numpy as np
 import palette
 import ppucache
 
-DRAW_GRID = False
+FORCE_PPU_DEBUG = False
 
-PPU_DEBUG = False
 
 SCANLINES = 262
 VISIBLE_SCANLINES = 240
@@ -52,8 +51,9 @@ SPRITE_PALETTE_BASE = 0x3f10
 
 class PPU(object):
 
-    def __init__(self, cpu):
+    def __init__(self, cpu, ppu_debug = False):
         self.cpu = cpu
+        self.ppu_debug = ppu_debug or FORCE_PPU_DEBUG
 
         self.cache = ppucache.PPUCache(self)
 
@@ -149,10 +149,10 @@ class PPU(object):
         # Set the latch, then return it. Write-only registers just set
         # the latch, but for now they also print an error message.
         if register == REG_PPUCTRL:
-            if PPU_DEBUG:
+            if self.ppu_debug:
                 print >> sys.stderr, 'Warning: read from PPUCTRL'
         elif register == REG_PPUMASK:
-            if PPU_DEBUG:
+            if self.ppu_debug:
                 print >> sys.stderr, 'Warning: read from PPUMASK'
         elif register == REG_PPUSTATUS:
             # keep first five bits of latch
@@ -171,17 +171,17 @@ class PPU(object):
             self.nextScroll = 0
             self.nextAddr = 0
         elif register == REG_OAMADDR:
-            if PPU_DEBUG:
+            if self.ppu_debug:
                 print >> sys.stderr, 'Warning: read from OAMADDR'
         elif register == REG_OAMDATA:
             # TODO: if (oamaddr % 4) == 3, report that bits 2-4 are 0
             # see http://wiki.nesdev.com/w/index.php/PPU_OAM
             self.latch = ord(self.oam[self.oamaddr])
         elif register == REG_PPUSCROLL:
-            if PPU_DEBUG:
+            if self.ppu_debug:
                 print >> sys.stderr, 'Warning: read from PPUSCROLL'
         elif register == REG_PPUADDR:
-            if PPU_DEBUG:
+            if self.ppu_debug:
                 print >> sys.stderr, 'Warning: read from PPUADDR'
         elif register == REG_PPUDATA:
             # do not question the PPUDATA post-fetch read buffer
@@ -230,14 +230,14 @@ class PPU(object):
             emphasizeRed = (val >> 5) & 0x1 # bit 5
             emphasizeGreen = (val >> 6) & 0x1 # bit 6
             emphasizeBlue = (val >> 7) & 0x1 # bit 7
-            if PPU_DEBUG and grayscale:
+            if self.ppu_debug and grayscale:
                 print >> sys.stderr, "PPUMASK write: ignoring grayscale"
-            if PPU_DEBUG and (leftBkg or leftSprites):
+            if self.ppu_debug and (leftBkg or leftSprites):
                 print >> sys.stderr, "PPUMASK write: ignoring left-column hiding"
-            if PPU_DEBUG and (emphasizeRed or emphasizeGreen or emphasizeBlue):
+            if self.ppu_debug and (emphasizeRed or emphasizeGreen or emphasizeBlue):
                 print >> sys.stderr, "PPUMASK write: ignoring color emphasis"
         elif register == REG_PPUSTATUS:
-            if PPU_DEBUG:
+            if self.ppu_debug:
                 print >> sys.stderr, 'Warning: write to PPUSTATUS'
         elif register == REG_OAMADDR:
             self.oamaddr = val
@@ -249,9 +249,13 @@ class PPU(object):
             if self.nextScroll == 0:
                 self.scrollX = val
                 self.nextScroll = 1
+                if self.ppu_debug:
+                    print "PPUSCROLL: x = %d" % val
             else:
                 self.scrollY = val
                 self.nextScroll = 0
+                if self.ppu_debug:
+                    print "PPUSCROLL: y = %d" % val
         elif register == REG_PPUADDR:
             if self.nextAddr == 0:
                 # addresses past $3fff are mirrored down
@@ -354,6 +358,8 @@ class PPU(object):
                 self.pgscreen.paletteIndices[tilecolumn][tilerow] = paletteNumber
 
     def vblankStart(self):
+        if self.ppu_debug:
+            print "Starting vblank"
         self.vblank = 1
         if self.vblankNMI:
             # signal NMI
@@ -361,6 +367,8 @@ class PPU(object):
         self.sleepUntil(VBLANK_END, self.vblankEnd)
 
     def vblankEnd(self):
+        if self.ppu_debug:
+            print "Ending vblank"
         self.vblank = 0
         self.updateBgTiles()
         # It's possible that we're supposed to reset sprite 0 one
@@ -380,7 +388,7 @@ class PPU(object):
         # "background hack".
         self.universalBg = ord(self.cpu.mem.ppuRead(0x3F00)) # TODO no magic numbers
         sprite0hit = self.findSprite0Hit()
-        if PPU_DEBUG:
+        if self.ppu_debug:
             print "BEGIN PPU FRAME %d" % self.frame
         # TODO check the frame count for off-by-one errors
         self.pgscreen.tick(self.frame)
@@ -390,6 +398,8 @@ class PPU(object):
             self.sleepUntil(sprite0hit, self.flagSprite0Hit)
 
     def flagSprite0Hit(self):
+        if self.ppu_debug:
+            print "Setting sprite 0 hit flag"
         self.sprite0Hit = 1
         self.sleepUntil(VBLANK_START, self.vblankStart)
 
@@ -479,7 +489,7 @@ class PPU(object):
         # Sprite 0 hits can only happen if both background and sprites
         # are being rendered.
         if not (self.maskState & ((1 << 3) | (1 << 4))):
-            if PPU_DEBUG:
+            if self.ppu_debug:
                 print "No sprite 0 hit"
             return -1
 
@@ -488,7 +498,7 @@ class PPU(object):
 
         if spritetop >= 0xf0:
             # Sprite 0 is wholly off the screen; no sprite 0 hit
-            if PPU_DEBUG:
+            if self.ppu_debug:
                 print "No sprite 0 hit"
             return -1
 
@@ -563,12 +573,12 @@ class PPU(object):
                     out = (x
                            + (y * CYCLES_PER_SCANLINE)
                            + SPRITE0_CYCLE_OFFSET)
-                    if PPU_DEBUG:
+                    if self.ppu_debug:
                         print ("Sprite 0 hit at (%d,%d): PPU cycle %d" %
                                (x, y, out))
                     return out
 
         # Didn't find a hit.
-        if PPU_DEBUG:
+        if self.ppu_debug:
             print "No sprite 0 hit"
         return -1

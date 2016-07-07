@@ -14,6 +14,10 @@ def getargs():
                         help="Disable audio output",
                         dest="audio",
                         action="store_false")
+    parser.add_argument("--ppu-debug",
+                        help="Print PPU debug information",
+                        dest="ppuDebug",
+                        action="store_true")
     args = parser.parse_args()
     print args.rom
     return args
@@ -32,5 +36,6 @@ if __name__ == "__main__":
     args = getargs()
     print args
     c = makeCPU(args.rom,
-                audioEnabled = args.audio)
+                audioEnabled = args.audio,
+                ppuDebug = args.ppuDebug)
     run(c)

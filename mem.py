@@ -1,7 +1,5 @@
 # Functions for memory addressing go here.
 
-from ppu import PPU_DEBUG
-
 from rom import MirrorMode
 
 from operator import xor
