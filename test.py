@@ -21,9 +21,7 @@ ROMFILE = 'smb.nes'
 STARTADDR = None
 
 nestestrom = rom.readRom(ROMFILE)
-c = cpu.CPU(prgrom = nestestrom.prgrom,
-            chrrom = nestestrom.chrrom,
-            mapper = nestestrom.mapper)
+c = cpu.CPU(rom=nestestrom)
 startaddr = c.mem.dereference(mem.VEC_RST)
 startop = opc.instrFromAddr(startaddr, c)
 firstops = opc.instrListFromAddr(startaddr, 50, c)
@@ -90,9 +88,7 @@ def step():
 def reset():
     global c
     c.ppu.pgscreen.window.close() # still doesn't seem to work
-    c = cpu.CPU(prgrom = nestestrom.prgrom,
-                chrrom = nestestrom.chrrom,
-                mapper = nestestrom.mapper)
+    c = cpu.CPU(rom=nestestrom)
     if STARTADDR is not None:
         c.PC = STARTADDR
     c.printState()

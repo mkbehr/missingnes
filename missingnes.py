@@ -21,9 +21,7 @@ def getargs():
 def makeCPU(romfilepath,
             *cpuargs, **cpukwargs):
     r = rom.readRom(romfilepath)
-    return cpu.CPU(prgrom = r.prgrom,
-                   chrrom = r.chrrom,
-                   mapper = r.mapper,
+    return cpu.CPU(rom=r,
                    *cpuargs, **cpukwargs)
 
 def run(c):

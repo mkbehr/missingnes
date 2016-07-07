@@ -20,8 +20,10 @@ FLAG_N = 0x80 # negative result
 
 class CPU(object):
 
-    def __init__(self, prgrom, chrrom, mapper=0,
-                 audioEnabled = True):
+    def __init__(self,
+                 rom,
+                 audioEnabled = True,
+                 ppuDebug = False):
         """Sets up an initial CPU state loading from the given ROM. Simulates
         the reset signal."""
 
@@ -29,14 +31,14 @@ class CPU(object):
 
         # see http://wiki.nesdev.com/w/index.php/CPU_power_up_state
         # for some initial values
-        self.prgrom = prgrom
-        self.prgromsize = len(prgrom)
-        self.chrrom = chrrom
-        self.chrromsize = len(chrrom)
-        if mapper == 0:
-            self.mem = mem.Memory(self)
-        elif mapper == 1:
-            self.mem = mem.MMC1(self)
+        self.prgrom = rom.prgrom
+        self.prgromsize = len(self.prgrom)
+        self.chrrom = rom.chrrom
+        self.chrromsize = len(rom.chrrom)
+        if rom.mapper == 0:
+            self.mem = mem.Memory(self, rom.mirroring)
+        elif rom.mapper == 1:
+            self.mem = mem.MMC1(self, rom.mirroring)
         else:
             raise NotImplementedError("Unimplemented mapper %d" % mapper)
 

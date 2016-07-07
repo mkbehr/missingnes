@@ -2,6 +2,8 @@
 
 from ppu import PPU_DEBUG
 
+from rom import MirrorMode
+
 from operator import xor
 import struct
 import sys
@@ -25,11 +27,12 @@ JOYSTICK_WARN = False
 class Memory(object):
     """Simple NROM memory mapping and RAM."""
 
-    def __init__(self, cpu):
+    def __init__(self, cpu, mirroring):
         # ignoring some special bytes. see:
         # http://wiki.nesdev.com/w/index.php/CPU_power_up_state
         self.cpu = cpu
         self.ram = ['\xff'] * RAM_SIZE
+        self.mirroring = mirroring
         self.ppuram = ['\x00'] * PPU_RAM_SIZE
         self.prgram = ['\x00'] * PRG_RAM_SIZE
         self.instructionCache = {} # for NROM, this is never invalidated
@@ -115,27 +118,33 @@ class Memory(object):
         return struct.unpack("<H", pointer)[0]
 
     def ppuNametablePaddr(self, vaddr):
-        # assume horizontal mirroring for now
         paddr = vaddr - 0x2000
-        # adjust paddr for horizontal mirroring
-        if (0x400 <= paddr < 0x800) or (0xc00 <= paddr < 0x1000):
-            paddr -= 0x400
-        # now remember that paddr 2400 lives at vaddr 2800
-        if 0x800 <= paddr:
-            paddr -= 0x800
+        if self.mirroring == MirrorMode.horizontalMirroring:
+            # adjust paddr for horizontal mirroring
+            if (0x400 <= paddr < 0x800) or (0xc00 <= paddr < 0x1000):
+                paddr -= 0x400
+            # now remember that paddr 2400 lives at vaddr 2800
+            if 0x800 <= paddr:
+                paddr -= 0x400
+        elif self.mirroring == MirrorMode.verticalMirroring:
+            paddr = paddr % 0x800
+        elif self.mirroring == MirrorMode.fourScreenVRAM:
+            pass
+        elif self.mirroring == MirrorMode.oneScreenMirroring:
+            raise RuntimeError("NROM mapper does not support one-screen mirroring")
+        else:
+            raise RuntimeError("Unrecognized mirroring type: %s" % str(self.mirroring))
         return paddr
 
     def ppuRead(self, address):
         if 0 <= address < 0x2000:
             return self.cpu.chrrom[address]
-        # assume horizontal mirroring for now.
-        # TODO support switching depending on .nes file flags
-        elif 0x2000 <= address < 0x3000:
+        elif 0x2000 <= address < 0x3f00:
+            # 0x3000 through 0x3f00 mirrors memory at 0x2000
+            if 0x3000 <= address:
+                address -= 0x1000
             paddr = self.ppuNametablePaddr(address)
             return self.ppuram[paddr]
-        elif 0x3000 <= address < 0x3f00:
-            # mirror memory at 0x2000
-            return self.ppuRead(address - 0x1000)
         elif 0x3f00 <= address <= 0x4000:
             paletteRamAddr = (address - 0x3f00) % 32
             # 3f14/3f18/3f1c mirror 3f04/3f08/3f0c
@@ -193,12 +202,13 @@ class MMC1(Memory):
     # writes and only the first counts. that is nowhere near supported
     # here.
 
-    def __init__(self, cpu):
+    def __init__(self, cpu, mirroring=None):
         # ignoring some special bytes. see:
         # http://wiki.nesdev.com/w/index.php/CPU_power_up_state
         self.cpu = cpu
         self.ram = ['\xff'] * RAM_SIZE
         self.prgram = ['\x00'] * PRG_RAM_SIZE
+        # ignore mirroring input
 
         self.shiftIndex = 0
         self.shiftContents = 0x00
@@ -211,7 +221,7 @@ class MMC1(Memory):
 
         # mirroring: 0: one-screen lower bank; 1: one-screen upper
         # bank; 2: vertical; 3: horizontal
-        self.mirroring = 0
+        self.mirroringN = 0
         # PRG slot: 0: $c000 swappable and $8000 fixed; 1: $c000 fixed
         # and $8000 swappable
         self.PRGSlot = 1
@@ -280,7 +290,7 @@ class MMC1(Memory):
     def setMapperRegister(self, address, val):
         if 0x8000 <= address < 0xa000:
             # bits 0-1 set mirroring
-            self.mirroring = val & 0x3
+            self.mirroringN = val & 0x3
             # bit 2 sets slot select
             self.PRGSlot = (val >> 2) & 0x1
             # bit 3 sets PRG size
