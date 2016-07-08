@@ -42,11 +42,15 @@ class Memory(object):
         return out
 
     def read(self, address):
-        if 0x0 <= address < 0x2000:
+        if 0x0 <= address < 0x800:
             # Internal RAM from $0000 to $07FF; higher addresses here are mirrored
-            # if self.ram[address % 0x0800] == '\x03':
-            #     print hex(address)
-            return self.ram[address % 0x0800]
+            return self.ram[address]
+        # chain calls here to deal with mirrored address space (this
+        # helps with cheats)
+
+        # TODO: test with proper battery, make sure this isn't causing excessive slowdown
+        elif 0x800 <= address < 0x2000:
+            return self.read(address % 0x800)
         elif 0x2000 <= address < 0x4000:
             register = (address - 0x2000) % 8
             return self.cpu.ppu.readReg(register)
@@ -80,16 +84,16 @@ class Memory(object):
             raise RuntimeError("Address out of range: %x" % address)
 
     def write(self, address, val):
-        if (address % 0x0800) == 0x75A:
-            val = 9 # DEBUG: this gives infinite lives in SMB
         if isinstance(val, int): # someday we will want to get rid of this chr/ord weirdness
             val = chr(val)
         # Lot of copy-pasting between here and read. Not sure how to
         # fix it without like a page table, which is probably more
         # effort than it's worth
-        if 0x0 <= address < 0x2000:
+        if 0x0 <= address < 0x800:
             # Internal RAM from $0000 to $07FF; higher addresses here are mirrored
-            self.ram[address % 0x0800] = val
+            self.ram[address] = val
+        elif 0x800 <= address < 0x2000:
+            self.write(address % 0x800)
         elif 0x2000 <= address < 0x4000:
             register = (address - 0x2000) % 8
             self.cpu.ppu.writeReg(register, ord(val))

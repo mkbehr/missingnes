@@ -1,3 +1,4 @@
+import cheats
 import cpu
 import instruction
 import mem
@@ -18,8 +19,12 @@ def getargs():
                         help="Print PPU debug information",
                         dest="ppuDebug",
                         action="store_true")
+    # TODO: more general cheat interface
+    parser.add_argument("--smb-cheats",
+                        help="Activate cheats for Super Mario Bros.",
+                        dest="smbCheats",
+                        action="store_true")
     args = parser.parse_args()
-    print args.rom
     return args
 
 def makeCPU(romfilepath,
@@ -34,8 +39,14 @@ def run(c):
 
 if __name__ == "__main__":
     args = getargs()
-    print args
+    if args.smbCheats:
+        chts = cheats.CheatManager([cheats.smbInvincible,
+                                    cheats.smbInfiniteLives,
+                                    cheats.smbNoFall])
+    else:
+        chts = None
     c = makeCPU(args.rom,
                 audioEnabled = args.audio,
-                ppuDebug = args.ppuDebug)
+                ppuDebug = args.ppuDebug,
+                cheats = chts)
     run(c)

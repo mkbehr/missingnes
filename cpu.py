@@ -23,7 +23,8 @@ class CPU(object):
     def __init__(self,
                  rom,
                  audioEnabled = True,
-                 ppuDebug = False):
+                 ppuDebug = False,
+                 cheats = None):
         """Sets up an initial CPU state loading from the given ROM. Simulates
         the reset signal."""
 
@@ -41,6 +42,9 @@ class CPU(object):
             self.mem = mem.MMC1(self, rom.mirroring)
         else:
             raise NotImplementedError("Unimplemented mapper %d" % mapper)
+
+        if cheats:
+            cheats.wrapMemory(self.mem)
 
         # registers
         self.reg_A = 0
