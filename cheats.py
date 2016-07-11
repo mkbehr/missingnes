@@ -1,5 +1,9 @@
 import functools
 
+# Note: this approach to cheats does cause a small speed hit. It might
+# be faster to directly interact with the array we use to store
+# physical memory and intercept reads/writes there.
+
 class CheatManager(object):
 
     def __init__(self, cheats):

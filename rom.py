@@ -1,10 +1,10 @@
 import sys
 
-from enum import Enum
+from enum import IntEnum
 
 # Note: one-screen mirroring is never specified from the ROM file,
 # only set by the mapper.
-class MirrorMode(Enum):
+class MirrorMode(IntEnum): # IntEnum to interoperate with c++ code
     horizontalMirroring = 1
     verticalMirroring = 2
     fourScreenVRAM = 3

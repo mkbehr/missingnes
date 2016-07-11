@@ -4,6 +4,7 @@
 #include <sstream>
 #include <fstream>
 #include <cassert>
+#include <stdnoreturn.h>
 
 #include <unistd.h>
 #include <sys/param.h>
@@ -20,7 +21,7 @@ using namespace std;
 #define checkGlErrors(cont) \
   (_checkGlErrors(cont, __FILE__ ":" STRINGIZE(__LINE__)))
 
-void die(void) {
+noreturn void die(void) {
   glfwTerminate();
   exit(-1);
 }
@@ -56,8 +57,9 @@ void _checkGlErrors(int continue_after_err,
   }
 }
 
-Screen::Screen(void) {
-
+Screen::Screen(ScrollType st)
+  : scrollType(st), scrollX(0), scrollY(0)
+{
   // Bit of a hack here: initializing the window will change the
   // working directory for some reason, so store it and change it back
   char cwd[MAXPATHLEN];
@@ -65,8 +67,6 @@ Screen::Screen(void) {
     cerr << "Couldn't get working directory\n";
     die();
   }
-
-  // TODO assign pointer to PPU object (or let python handle that interface)
 
   if (initWindow(&window) < 0) {
     cerr << "Couldn't create window\n";
@@ -128,11 +128,11 @@ Screen::Screen(void) {
   initBgVertices();
 
   // there's probably a cleaner c++ way to do this
-  tileIndices.resize(TILE_COLUMNS);
-  paletteIndices.resize(TILE_COLUMNS);
-  for (int i = 0; i < TILE_COLUMNS; i++) {
-    tileIndices[i].resize(TILE_ROWS);
-    paletteIndices[i].resize(TILE_ROWS);
+  tileIndices.resize(tileColumns());
+  paletteIndices.resize(tileColumns());
+  for (int i = 0; i < tileColumns(); i++) {
+    tileIndices[i].resize(tileRows());
+    paletteIndices[i].resize(tileRows());
   }
 
   setUniversalBg(0);
@@ -140,11 +140,45 @@ Screen::Screen(void) {
   spriteVertices.reserve(OAM_ENTRIES * 6);
 }
 
+int Screen::tileRows() {
+  switch(scrollType) {
+  case SCROLL_VERTICAL:
+    return VISIBLE_TILE_ROWS * 2;
+  case SCROLL_HORIZONTAL:
+    return VISIBLE_TILE_ROWS;
+  default:
+    cerr << "tileRows: invalid scroll type\n";
+    die();
+  }
+}
+
+int Screen::tileColumns() {
+  switch(scrollType) {
+  case SCROLL_VERTICAL:
+    return VISIBLE_TILE_COLUMNS;
+  case SCROLL_HORIZONTAL:
+    return VISIBLE_TILE_COLUMNS * 2;
+  default:
+    cerr << "tileRows: invalid scroll type\n";
+    die();
+  }
+}
+
 GLint safeGetAttribLocation(GLuint program, const GLchar *name) {
   GLint loc = glGetAttribLocation(program, name);
   checkGlErrors(0);
   if (loc < 0) {
     cerr << "Couldn't get program attribute " << name << "\n";
+    die();
+  }
+  return loc;
+}
+
+GLint safeGetUniformLocation(GLuint program, const GLchar *name) {
+  GLint loc = glGetUniformLocation(program, name);
+  checkGlErrors(0);
+  if (loc < 0) {
+    cerr << "Couldn't get program uniform " << name << "\n";
     die();
   }
   return loc;
@@ -247,22 +281,25 @@ void Screen::initShaders(void) {
   glUseProgram(shader);
   checkGlErrors(0);
 
-  // shader attribute pointers
-  xyAttrib = safeGetAttribLocation(shader, "xy");
-  xHighAttrib = safeGetAttribLocation(shader, "x_high");
+  // shader attribute/uniform pointers
+  posAttrib = safeGetAttribLocation(shader, "pos");
+  scrollAttrib = safeGetAttribLocation(shader, "scroll");
   tuvAttrib = safeGetAttribLocation(shader, "v_tuv");
   paletteNAttrib = safeGetAttribLocation(shader, "v_palette_n");
+
+  patternTableUniform = safeGetUniformLocation(shader, "patternTable");
+  localPalettesUniform = safeGetUniformLocation(shader, "localPalettes");
 }
 
 void Screen::initBgVertices(void) {
-  for (int x = 0; x < TILE_COLUMNS; x++) {
-    unsigned char x_left = x*8;
-    unsigned char x_right = (x+1)*8;
-    unsigned char x_left_high = 0;
-    unsigned char x_right_high = (x_right == 0 ? 1 : 0);
-    for (int y = 0; y < TILE_ROWS; y++) {
-      unsigned char y_bottom = (TILE_ROWS - y - 1) * 8;
-      unsigned char y_top = (TILE_ROWS - y) * 8;
+  for (int x = 0; x < tileColumns(); x++) {
+    float x_left = x*8;
+    float x_right = (x+1)*8;
+    for (int y = 0; y < tileRows(); y++) {
+      float y_bottom = (VISIBLE_TILE_ROWS - y - 1) * 8;
+      float y_top = (VISIBLE_TILE_ROWS - y) * 8;
+      float x_scroll = 0; // this will change
+      float y_scroll = 0; // this will change
       unsigned char tile = 0; // this will change
       unsigned char u_left = 0;
       unsigned char u_right = 1;
@@ -271,19 +308,19 @@ void Screen::initBgVertices(void) {
       unsigned char palette_index = 0; // this will change
 
       int vertex_index =
-        (x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
+        (x + y*tileColumns()) * VERTICES_PER_TILE;
 
       struct glVertex bottomLeft =
-        {x_left, y_bottom, x_left_high,
+        {x_left, y_bottom, x_scroll, y_scroll,
          tile, u_left, v_bottom, palette_index};
       struct glVertex bottomRight =
-        {x_right, y_bottom, x_right_high,
+        {x_right, y_bottom, x_scroll, y_scroll,
          tile, u_right, v_bottom, palette_index};
       struct glVertex topLeft =
-        {x_left, y_top, x_left_high,
+        {x_left, y_top, x_scroll, y_scroll,
          tile, u_left, v_top, palette_index};
       struct glVertex topRight =
-        {x_right, y_top, x_right_high,
+        {x_right, y_top, x_scroll, y_scroll,
          tile, u_right, v_top, palette_index};
 
       // represent square as two triangles
@@ -333,14 +370,15 @@ void Screen::setTileIndices(vector<vector<unsigned char> > tiles) {
   tileIndices = tiles;
 }
 
-void Screen::setTileIndices(unsigned char *tiles) {
+void Screen::setTileIndices(unsigned char *tiles, unsigned int len) {
   // this is probably slower than it needs to be, but let's just make
   // it work for now
-  tileIndices.resize(TILE_COLUMNS);
-  for (int x = 0; x < TILE_COLUMNS; x++) {
-    tileIndices[x].resize(TILE_ROWS);
-    for (int y = 0; y < TILE_ROWS; y++) {
-      tileIndices[x][y] = tiles[(x * TILE_ROWS) + y];
+  assert(len == tileColumns() * tileRows());
+  tileIndices.resize(tileColumns());
+  for (int x = 0; x < tileColumns(); x++) {
+    tileIndices[x].resize(tileRows());
+    for (int y = 0; y < tileRows(); y++) {
+      tileIndices[x][y] = tiles[(x * tileRows()) + y];
     }
   }
 }
@@ -349,14 +387,15 @@ void Screen::setPaletteIndices(vector<vector<unsigned char> > palettes) {
   paletteIndices = palettes;
 }
 
-void Screen::setPaletteIndices(unsigned char *indices) {
+void Screen::setPaletteIndices(unsigned char *indices, unsigned int len) {
   // this is probably slower than it needs to be, but let's just make
   // it work for now
-  paletteIndices.resize(TILE_COLUMNS);
-  for (int x = 0; x < TILE_COLUMNS; x++) {
-    paletteIndices[x].resize(TILE_ROWS);
-    for (int y = 0; y < TILE_ROWS; y++) {
-      paletteIndices[x][y] = indices[(x * TILE_ROWS) + y];
+  assert(len == tileColumns() * tileRows());
+  paletteIndices.resize(tileColumns());
+  for (int x = 0; x < tileColumns(); x++) {
+    paletteIndices[x].resize(tileRows());
+    for (int y = 0; y < tileRows(); y++) {
+      paletteIndices[x][y] = indices[(x * tileRows()) + y];
     }
   }
 }
@@ -409,6 +448,16 @@ void Screen::setMask(unsigned char m) {
   maskState = m;
 }
 
+void Screen::setScrollCoords(unsigned int x, unsigned int y) {
+  scrollX = x;
+  scrollY = y;
+}
+
+void Screen::setScrollType(ScrollType st) {
+  cerr << "Changing scroll types is not implemented\n";
+  die();
+}
+
 
 void Screen::drawToBuffer() {
   // State we need by the time we finish this:
@@ -419,6 +468,7 @@ void Screen::drawToBuffer() {
   // - BG_PATTERN_TABLE_TEXTURE needs to be populated with the background pattern table
   // - we need data for the actual tiles (tileIndices and paletteIndices from the python, set by the ppu)
   //   (so maybe keep the ppu setting that, and then move it from python to c++)
+  // - scroll coordinates need to be set (currently assuming they're consistent in a frame)
   // For sprites:
   // - spritePalettes needs to be set to a buffer with the local palettes
   // - SPRITE_PATTERN_TABLE_TEXTURE needs to be poulated with the sprite pattern table
@@ -451,13 +501,32 @@ void Screen::drawToBuffer() {
 
     checkGlErrors(0);
 
-    // Set tile and palette. The rest of the values in the VBO won't change.
-    for (int x = 0; x < TILE_COLUMNS; x++) {
-      for (int y = 0; y < TILE_ROWS; y++) {
+    // Set scroll, tile and palette.
+    // The rest of the values in the VBO won't change.
+    for (int x = 0; x < tileColumns(); x++) {
+      for (int y = 0; y < tileRows(); y++) {
         unsigned char tile = tileIndices[x][y];
         unsigned char palette = paletteIndices[x][y];
-        int screen_tile_index = (x + y*TILE_COLUMNS) * VERTICES_PER_TILE;
+        float sx = scrollX;
+        float sy = scrollY;
+        // Deal with wrapping here. If a tile scrolls wholly off the
+        // left of the screen, wrap it back. (Bit of a hack.)
+
+        // TODO: handle case where a tile is partially visible on one
+        // side of the screen but also partially visible on the other.
+
+        int xRight = (x+1)*8;
+        if (sx > xRight) {
+          sx -= tileColumns() * 8;
+        }
+        int yTop = (VISIBLE_TILE_ROWS-y)*8;
+        if (sy > yTop) {
+          sy -= tileRows() * 8;
+        }
+        int screen_tile_index = (x + y*tileColumns()) * VERTICES_PER_TILE;
         for (int vertex_i = 0; vertex_i < VERTICES_PER_TILE; vertex_i++) {
+          bgVertices[screen_tile_index + vertex_i].x_scroll = sx;
+          bgVertices[screen_tile_index + vertex_i].y_scroll = sy;
           bgVertices[screen_tile_index + vertex_i].tile = tile;
           bgVertices[screen_tile_index + vertex_i].palette = palette;
         }
@@ -468,13 +537,13 @@ void Screen::drawToBuffer() {
     glBufferData(GL_ARRAY_BUFFER, N_BG_VERTICES * sizeof(struct glVertex),
                  bgVertices, GL_DYNAMIC_DRAW);
     checkGlErrors(0);
-    glVertexAttribPointer(xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, x_low));
-    glEnableVertexAttribArray(xyAttrib);
+    glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, stride,
+                          (const GLvoid *) offsetof(struct glVertex, x_pos));
+    glEnableVertexAttribArray(posAttrib);
     checkGlErrors(0);
-    glVertexAttribPointer(xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, x_high));
-    glEnableVertexAttribArray(xHighAttrib);
+    glVertexAttribPointer(scrollAttrib, 2, GL_FLOAT, GL_FALSE, stride,
+                          (const GLvoid *) offsetof(struct glVertex, x_scroll));
+    glEnableVertexAttribArray(scrollAttrib);
     checkGlErrors(0);
     glVertexAttribPointer(tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride,
                           (const GLvoid *) offsetof(struct glVertex, tile));
@@ -485,13 +554,11 @@ void Screen::drawToBuffer() {
     glEnableVertexAttribArray(paletteNAttrib);
     checkGlErrors(0);
 
-    glUniform1i(glGetUniformLocation(shader, "patternTable"),
-                BG_PATTERN_TABLE_TEXID);
+    glUniform1i(patternTableUniform, BG_PATTERN_TABLE_TEXID);
     checkGlErrors(0);
 
     // FIXME magic number 16
-    glUniform4fv(glGetUniformLocation(shader, "localPalettes"), 16,
-                 bgPalettes);
+    glUniform4fv(localPalettesUniform, 16, bgPalettes);
     checkGlErrors(0);
 
     glDrawArrays(GL_TRIANGLES, 0, N_BG_VERTICES);
@@ -520,13 +587,15 @@ void Screen::drawToBuffer() {
       // preceding check ensures this won't overflow
       unsigned char spritetop = sprite.y_minus_one + 1;
 
-      unsigned char x_left = sprite.x;
-      unsigned char x_left_high = 0;
-      unsigned char x_right = sprite.x + 8;
-      unsigned char x_right_high = (x_right < 8 ? 1 : 0);
+      float x_left = sprite.x;
+      float x_right = sprite.x + 8;
 
-      unsigned char y_top = SCREEN_HEIGHT - sprite.y_minus_one - 1;
-      unsigned char y_bottom = y_top - 8;
+      float y_top = SCREEN_HEIGHT - sprite.y_minus_one - 1;
+      float y_bottom = y_top - 8;
+
+      // Note: sprites do not scroll
+      float x_scroll = 0;
+      float y_scroll = 0;
 
       unsigned char u_left =
         (sprite.attributes & OAM_FLIP_HORIZONTAL ? 1 : 0);
@@ -555,7 +624,6 @@ void Screen::drawToBuffer() {
 	  // left, unless it's horizontally mirrored.
           if ((!!is_head_front) != (!!(sprite.attributes & OAM_FLIP_HORIZONTAL))) {
             x_right += DONKEY_KONG_BIG_HEAD_INCREASE;
-            x_right_high = (x_right < (DONKEY_KONG_BIG_HEAD_INCREASE + 8) ? 1 : 0);
 	  } else {
 	    if (x_left <= DONKEY_KONG_BIG_HEAD_INCREASE) {
 	      x_left = 0;
@@ -567,16 +635,16 @@ void Screen::drawToBuffer() {
       }
 
       struct glVertex bottomLeft =
-        {x_left, y_bottom, x_left_high,
+        {x_left, y_bottom, x_scroll, y_scroll,
          tile, u_left, v_bottom, palette_index};
       struct glVertex bottomRight =
-        {x_right, y_bottom, x_right_high,
+        {x_right, y_bottom, x_scroll, y_scroll,
          tile, u_right, v_bottom, palette_index};
       struct glVertex topLeft =
-        {x_left, y_top, x_left_high,
+        {x_left, y_top, x_scroll, y_scroll,
          tile, u_left, v_top, palette_index};
       struct glVertex topRight =
-        {x_right, y_top, x_right_high,
+        {x_right, y_top, x_scroll, y_scroll,
          tile, u_right, v_top, palette_index};
 
       // first triangle
@@ -595,13 +663,14 @@ void Screen::drawToBuffer() {
     glBufferData(GL_ARRAY_BUFFER, spriteVertices.size() * sizeof(struct glVertex),
                  spriteVertices.data(), GL_DYNAMIC_DRAW);
     checkGlErrors(0);
-    glVertexAttribPointer(xyAttrib, 2, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, x_low));
-    glEnableVertexAttribArray(xyAttrib);
+    glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, stride,
+                          (const GLvoid *) offsetof(struct glVertex, x_pos));
+    glEnableVertexAttribArray(posAttrib);
     checkGlErrors(0);
-    glVertexAttribPointer(xHighAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, x_high));
-    glEnableVertexAttribArray(xHighAttrib);
+    glVertexAttribPointer(scrollAttrib, 2, GL_FLOAT, GL_FALSE, stride,
+                          (const GLvoid *) offsetof(struct glVertex, x_scroll));
+    glEnableVertexAttribArray(scrollAttrib);
+
     checkGlErrors(0);
     glVertexAttribPointer(tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride,
                           (const GLvoid *) offsetof(struct glVertex, tile));
@@ -612,13 +681,11 @@ void Screen::drawToBuffer() {
     glEnableVertexAttribArray(paletteNAttrib);
     checkGlErrors(0);
 
-    glUniform1i(glGetUniformLocation(shader, "patternTable"),
-                SPRITE_PATTERN_TABLE_TEXID);
+    glUniform1i(patternTableUniform, SPRITE_PATTERN_TABLE_TEXID);
     checkGlErrors(0);
 
     // FIXME magic number 16
-    glUniform4fv(glGetUniformLocation(shader, "localPalettes"), 16,
-                 spritePalettes);
+    glUniform4fv(localPalettesUniform, 16, spritePalettes);
     checkGlErrors(0);
 
     glDrawArrays(GL_TRIANGLES, 0, spriteVertices.size());
@@ -732,8 +799,8 @@ void Screen::testRenderLoop(void) {
 
 extern "C" {
 
-  Screen *ex_constructScreen(void) {
-    return new Screen();
+  Screen *ex_constructScreen(int st) {
+    return new Screen((ScrollType) st);
   }
 
   void ex_setUniversalBg(Screen *sc, int bg) {
@@ -759,12 +826,14 @@ extern "C" {
     sc->setSpritePatternTable(ptab);
   }
 
-  void ex_setTileIndices(Screen *sc, unsigned char *indices) {
-    sc->setTileIndices(indices);
+  void ex_setTileIndices(Screen *sc, unsigned char *indices,
+                         unsigned int len) {
+    sc->setTileIndices(indices, len);
   }
 
-  void ex_setPaletteIndices(Screen *sc, unsigned char *indices) {
-    sc->setPaletteIndices(indices);
+  void ex_setPaletteIndices(Screen *sc, unsigned char *indices,
+                            unsigned int len) {
+    sc->setPaletteIndices(indices, len);
   }
 
   void ex_setOam(Screen *sc, unsigned char *oamBytes) {
@@ -773,6 +842,10 @@ extern "C" {
 
   void ex_setMask(Screen *sc, unsigned char m) {
     sc->setMask(m);
+  }
+
+  void ex_setScrollCoords(Screen *sc, unsigned int x, unsigned int y) {
+    sc->setScrollCoords(x,y);
   }
 
   void ex_drawToBuffer(Screen *sc) {

@@ -2,6 +2,7 @@ import sys
 
 import palette
 import ppucache
+from rom import MirrorMode
 
 FORCE_PPU_DEBUG = False
 
@@ -56,8 +57,9 @@ SPRITE_PALETTE_BASE = 0x3f10
 
 class PPU(object):
 
-    def __init__(self, cpu, ppu_debug = False):
+    def __init__(self, cpu, mirroring, ppu_debug = False):
         self.cpu = cpu
+        self.mirroring = mirroring
         self.ppu_debug = ppu_debug or FORCE_PPU_DEBUG
 
         self.cache = ppucache.PPUCache(self)
@@ -107,8 +109,8 @@ class PPU(object):
         self.oamaddr = 0x00
 
         ## PPUSCROLL
-        self.scrollX = 0
-        self.scrollY = 0
+        self.fineScrollX = 0
+        self.fineScrollY = 0
         self.nextScroll = 0 # 0 for X, 1 for Y
 
         ## PPUADDR
@@ -249,15 +251,15 @@ class PPU(object):
             if self.nextScroll == 0:
                 # DEBUG
                 if 10000 < self.fineCycle() < 80000:
-                    self.scrollX = val
-                # self.scrollX = val
+                    self.fineScrollX = val
+                # self.fineScrollX = val
                 self.nextScroll = 1
                 if self.ppu_debug:
                     print "PPUSCROLL (cycle %d): x = %d" % (
                     self.fineCycle(),
                     val)
             else:
-                self.scrollY = val
+                self.fineScrollY = val
                 self.nextScroll = 0
                 if self.ppu_debug:
                     print "PPUSCROLL (cycle %d): y = %d" % (
@@ -321,44 +323,74 @@ class PPU(object):
 
         return (lowbyte,highbyte)
 
+    def tileRows(self):
+        if self.mirroring == MirrorMode.horizontalMirroring:
+            # horizontal mirroring means vertical scrolling
+            return (VISIBLE_SCANLINES / 8) * 2
+        elif self.mirroring == MirrorMode.verticalMirroring:
+            return VISIBLE_SCANLINES / 8
+        else:
+            raise NotImplementedError("Unimplemented mirroring mode")
+
+    def tileColumns(self):
+        if self.mirroring == MirrorMode.horizontalMirroring:
+            # horizontal mirroring means vertical scrolling
+            return VISIBLE_COLUMNS / 8
+        elif self.mirroring == MirrorMode.verticalMirroring:
+            return (VISIBLE_COLUMNS / 8) * 2
+        else:
+            raise NotImplementedError("Unimplemented mirroring mode")
+
+    def scrollX(self):
+        coarseScrollX = (self.nametableBase % 2) * 256
+        return coarseScrollX + self.fineScrollX
+
+    def scrollY(self):
+        coarseScrollY = (self.nametableBase // 2) * 240
+        return coarseScrollY + self.fineScrollY
+
     def updateBgTiles(self):
-        # print "Updating BG tiles: scroll (%d, %d) base %d" % (
-        #     self.scrollX, self.scrollY, self.nametableBase) # DEBUG
-        for tilecolumn in range(VISIBLE_COLUMNS/8):
-            for tilerow in range(VISIBLE_SCANLINES/8):
+        for tilecolumn in xrange(self.tileColumns()):
+            for tilerow in xrange(self.tileRows()):
                 ## BACKGROUND
 
                 # Grab data from nametable to find pattern table
                 # entry. There are 30*32 bytes in a pattern table, and
                 # each byte corresponds to an 8*8-pixel tile.
 
-                # If we're at the start of a tile, refresh our cache. We
-                # can pull 8 horizontally-continguous pixels at once; we
-                # have a low-plane byte with the low-plane bits for 8
-                # pixels, and a high-plane byte with the high-plane bits
-                # for the same 8 pixels. Finally, we need to grab the
-                # background palette from the attribute table.
+                # We can pull 8 horizontally-continguous pixels at
+                # once: we have a low-plane byte with the low-plane
+                # bits for 8 pixels, and a high-plane byte with the
+                # high-plane bits for the same 8 pixels. Finally, we
+                # need to grab the background palette from the
+                # attribute table.
 
-                nametable = 0x2000 + 0x400 * self.nametableBase # TODO don't use magic numbers
-                scrolledcolumn = tilecolumn + (self.scrollX // 8)
-                scrolledrow = tilerow + (self.scrollY // 8)
-                nametableEntry = (nametable
-                                  + (scrolledcolumn % 32)
-                                  + (scrolledcolumn // 32) * 0x400
-                                  + 32 * ((scrolledrow % 30)
-                                          + (scrolledrow // 30) * 0x800))
+                # This function copies over both background
+                # nametables, ignoring the scroll data (both the low
+                # bits from PPUSCROLL and the high bits from PPUCTRL).
+
+                # TODO: remove assumption that there are exactly two
+                # background nametables
+
+                # Ignore the nametableBase setting from PPUCTRL here:
+                # it'll become the high bits for scrolling.
+                nametableBase = 0
+                if (tilecolumn >= (VISIBLE_COLUMNS / 8)):
+                    nametableBase += 1
+                if (tilerow >= (VISIBLE_SCANLINES / 8)):
+                    nametableBase += 2
+
+                nametable = 0x2000 + 0x400 * nametableBase # TODO don't use magic numbers
+                wrappedColumn = tilecolumn % (VISIBLE_COLUMNS / 8)
+                wrappedRow = tilerow % (VISIBLE_SCANLINES / 8)
+                nametableEntry = nametable + wrappedColumn + wrappedRow * 32
                 ptabTile = ord(self.cpu.mem.ppuRead(nametableEntry))
 
                 # TODO don't use magic numbers
-                attributeRow = scrolledrow // 4
-                attributeColumn = scrolledcolumn // 4
+                attributeRow = wrappedRow // 4
+                attributeColumn = wrappedColumn // 4
                 attributeTable = nametable + 0x3C0
-                attributeTableEntry = (attributeTable
-                                       + (attributeColumn % 8)
-                                       + (attributeColumn // 8) * 0x400
-                                       + 8 * ((attributeRow % 8)
-                                               + (attributeRow // 8) * 0x800))
-                # attributeTable + attributeColumn + attributeRow * 8
+                attributeTableEntry = attributeTable + attributeColumn + attributeRow * 8
                 attributeTile = ord(self.cpu.mem.ppuRead(attributeTableEntry))
 
                 # The attributeTile byte divides the 32x32 tile into
@@ -367,9 +399,9 @@ class PPU(object):
                 # the top-right, bits 4-5 are the bottom-left, and
                 # bits 6-7 are the bottom-right.
                 paletteOffset = 0
-                if (scrolledcolumn % 4) >= 2:
+                if (wrappedColumn % 4) >= 2:
                     paletteOffset += 1*2
-                if (scrolledrow % 4) >= 2:
+                if (wrappedRow % 4) >= 2:
                     paletteOffset += 2*2
 
                 paletteNumber = (attributeTile >> paletteOffset) & 0x3

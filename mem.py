@@ -47,8 +47,6 @@ class Memory(object):
             return self.ram[address]
         # chain calls here to deal with mirrored address space (this
         # helps with cheats)
-
-        # TODO: test with proper battery, make sure this isn't causing excessive slowdown
         elif 0x800 <= address < 0x2000:
             return self.read(address % 0x800)
         elif 0x2000 <= address < 0x4000:

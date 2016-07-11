@@ -7,18 +7,19 @@
 // defining GLFW_INCLUDE_GLEXT may also be useful in the future
 #include <GLFW/glfw3.h>
 
+// Right now we feed the x and y positions to the shader and also
+// their scroll positions. Is that reasonable? Should we instead be
+// dealing with that in our main code?
 struct glVertex {
-  unsigned char x_low;
-  unsigned char y;
-  unsigned char x_high;
+  float x_pos;
+  float y_pos;
+  float x_scroll;
+  float y_scroll;
   unsigned char tile;
   unsigned char u;
   unsigned char v;
   unsigned char palette;
 };
-// this may not be necessary now that we can just define a struct
-const int VERTEX_ELTS = sizeof(struct glVertex);
-static_assert(sizeof(struct glVertex) == 7, "glVertex struct has wrong size");
 
 struct oamEntry {
   unsigned char y_minus_one;
@@ -55,15 +56,19 @@ const int VISIBLE_SCANLINES = 240;
 const int CYCLES_PER_SCANLINE = 341;
 const int VISIBLE_COLUMNS = 256;
 
-const int TILE_ROWS = VISIBLE_SCANLINES/8;
-const int TILE_COLUMNS = VISIBLE_COLUMNS/8;
+// visible assuming no scrolling
+const int VISIBLE_TILE_ROWS = VISIBLE_SCANLINES/8;
+const int VISIBLE_TILE_COLUMNS = VISIBLE_COLUMNS/8;
 
 const int SCREEN_WIDTH = VISIBLE_COLUMNS;
 const int SCREEN_HEIGHT = VISIBLE_SCANLINES;
 
 const int VERTICES_PER_TILE = 6;
 
-const int N_BG_VERTICES = TILE_ROWS * TILE_COLUMNS * VERTICES_PER_TILE;
+// TODO: change to account for differing numbers of nametables
+const int N_NAMETABLES = 2;
+const int N_BG_VERTICES =
+  VISIBLE_TILE_ROWS * VISIBLE_TILE_COLUMNS * VERTICES_PER_TILE * N_NAMETABLES;
 
 const int PATTERN_TABLE_TILES = 256;
 const int PATTERN_TABLE_LENGTH = PATTERN_TABLE_TILES * 8 * 8;
@@ -103,9 +108,19 @@ const unsigned char MASK_MASK_EMPH_BLUE = 1<<7;
 const int DONKEY_KONG_BIG_HEAD_MODE = 0;
 const int DONKEY_KONG_BIG_HEAD_INCREASE = 16;
 
+// This needs to match up with the MirrorMode enum in rom.py
+enum ScrollType {
+  // Note: vertical scrolling means horizontal mirroring, and vice
+  // versa
+  SCROLL_VERTICAL = 1,   // MirrorMode.horizontalMirroring
+  SCROLL_HORIZONTAL = 2, // MirrorMode.verticalMirroring
+  SCROLL_BOTH = 3,       // MirrorMode.fourScreenVRAM
+  SCROLL_NONE = 4        // MirrorMode.oneScreenMirroring
+};
+
 class Screen {
 public:
-  Screen();
+  Screen(ScrollType st);
 
   void setUniversalBg(int);
   void setBgPalettes(vector<float>);
@@ -117,11 +132,13 @@ public:
   void setSpritePatternTable(vector<float>);
   void setSpritePatternTable(float*);
   void setTileIndices(vector<vector<unsigned char> >);
-  void setTileIndices(unsigned char *);
+  void setTileIndices(unsigned char *, unsigned int len);
   void setPaletteIndices(vector<vector<unsigned char> >);
-  void setPaletteIndices(unsigned char *);
+  void setPaletteIndices(unsigned char *, unsigned int len);
   void setOam(unsigned char *);
   void setMask(unsigned char);
+  void setScrollCoords(unsigned int x, unsigned int y);
+  void setScrollType(ScrollType st);
 
   void testRenderLoop();
   void drawToBuffer();
@@ -133,10 +150,14 @@ private:
   GLFWwindow *window;
   GLuint shader;
   // shader attribute locations
-  GLint xyAttrib;
-  GLint xHighAttrib;
+  GLint posAttrib;
+  GLint scrollAttrib;
   GLint tuvAttrib;
   GLint paletteNAttrib;
+
+  // shader uniform locations
+  GLint patternTableUniform;
+  GLint localPalettesUniform;
 
   // buffers
   GLuint bgVbo;
@@ -168,11 +189,18 @@ private:
 
   unsigned char maskState;
 
+  unsigned int scrollX;
+  unsigned int scrollY;
+
+  ScrollType scrollType;
+
   // methods
 
   void initShaders();
   void initBgVertices();
 
+  int tileRows();
+  int tileColumns();
 
 };
 

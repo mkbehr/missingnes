@@ -72,7 +72,9 @@ class CPU(object):
         self.apuCyclesUntilAction = 0
         self.apuStoredCycles = 0
 
-        self.ppu = ppu.PPU(self, ppuDebug)
+        self.ppu = ppu.PPU(cpu = self,
+                           mirroring = rom.mirroring,
+                           ppu_debug = ppuDebug)
         self.apu = apu.APU(self)
 
         # Cycles for the PPU to catch up on. (When the CPU executes a

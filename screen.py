@@ -5,7 +5,7 @@ have more separation?)
 
 """
 import ctypes
-from ctypes import CDLL, c_void_p, c_int, c_float, c_ubyte
+from ctypes import CDLL, c_void_p, c_int, c_uint, c_float, c_ubyte, POINTER
 import threading
 import time
 import sys
@@ -15,13 +15,12 @@ import ppu
 
 PROGRAM_NAME = "Missingnes"
 
-TILE_ROWS = ppu.VISIBLE_SCANLINES/8
-TILE_COLUMNS = ppu.VISIBLE_COLUMNS/8
+# visible assuming no scrolling
+VISIBLE_TILE_ROWS = ppu.VISIBLE_SCANLINES/8
+VISIBLE_TILE_COLUMNS = ppu.VISIBLE_COLUMNS/8
 
 SCREEN_WIDTH = ppu.VISIBLE_COLUMNS
 SCREEN_HEIGHT = ppu.VISIBLE_SCANLINES
-
-N_BG_VERTICES = TILE_ROWS * TILE_COLUMNS * 6
 
 PATTERN_TABLE_TILES = 256
 PATTERN_TABLE_ENTRIES = 8*8*PATTERN_TABLE_TILES
@@ -69,8 +68,9 @@ def trace(func):
 class CScreen(object):
     # Is this the best interface structure? Eh, it'll work.
 
-    def __init__(self):
+    def __init__(self, mirroring):
         libscreen = CDLL("libscreen.so")
+        libscreen.ex_constructScreen.argtypes = [c_int]
         libscreen.ex_constructScreen.restype = c_void_p
 
         libscreen.ex_setUniversalBg.argtypes = [c_void_p, c_int]
@@ -90,16 +90,19 @@ class CScreen(object):
         [c_void_p, (c_float * PATTERN_TABLE_ENTRIES)]
 
         libscreen.ex_setTileIndices.argtypes = \
-        [c_void_p, c_ubyte * (TILE_ROWS * TILE_COLUMNS)]
+        [c_void_p, POINTER(c_ubyte), c_uint]
 
         libscreen.ex_setPaletteIndices.argtypes = \
-        [c_void_p, c_ubyte * (TILE_ROWS * TILE_COLUMNS)]
+        [c_void_p, POINTER(c_ubyte), c_uint]
 
         libscreen.ex_setOam.argtypes = \
         [c_void_p, c_ubyte * ppu.OAM_SIZE]
 
         libscreen.ex_setMask.argtypes = \
         [c_void_p, c_ubyte]
+
+        libscreen.ex_setScrollCoords.argtypes = \
+        [c_void_p, c_uint, c_uint]
 
         libscreen.ex_draw.argtypes = [c_void_p]
         libscreen.ex_draw.restype = c_int
@@ -109,7 +112,7 @@ class CScreen(object):
 
         self.libscreen = libscreen
 
-        self.screen_p = libscreen.ex_constructScreen()
+        self.screen_p = self.libscreen.ex_constructScreen(mirroring)
 
     def setUniversalBg(self, bg):
         self.libscreen.ex_setUniversalBg(self.screen_p, bg)
@@ -136,22 +139,18 @@ class CScreen(object):
         self.libscreen.ex_setSpritePatternTable(self.screen_p, c_ptab)
 
     def setTileIndices(self, indices):
-        assert(len(indices) == TILE_COLUMNS)
         intermediate = []
         for column in indices:
-            assert len(column) == TILE_ROWS
             intermediate += column
-        c_indices = (c_ubyte * (TILE_ROWS * TILE_COLUMNS)) (*intermediate)
-        self.libscreen.ex_setTileIndices(self.screen_p, c_indices)
+        c_indices = (c_ubyte * (len(intermediate))) (*intermediate)
+        self.libscreen.ex_setTileIndices(self.screen_p, c_indices, len(intermediate))
 
     def setPaletteIndices(self, indices):
-        assert(len(indices) == TILE_COLUMNS)
         intermediate = []
         for column in indices:
-            assert len(column) == TILE_ROWS
             intermediate += column
-        c_indices = (c_ubyte * (TILE_ROWS * TILE_COLUMNS)) (*intermediate)
-        self.libscreen.ex_setPaletteIndices(self.screen_p, c_indices)
+        c_indices = (c_ubyte * (len(intermediate))) (*intermediate)
+        self.libscreen.ex_setPaletteIndices(self.screen_p, c_indices, len(intermediate))
 
     def setOam(self, oamBytes):
         assert(len(oamBytes) == ppu.OAM_SIZE)
@@ -160,6 +159,9 @@ class CScreen(object):
 
     def setMask(self, m):
         self.libscreen.ex_setMask(self.screen_p, m)
+
+    def setScrollCoords(self, x, y):
+        self.libscreen.ex_setScrollCoords(self.screen_p, x, y)
 
     def drawToBuffer(self):
         self.libscreen.ex_drawToBuffer(self.screen_p)
@@ -180,15 +182,21 @@ class Screen(object):
         self.lastBgPattern = None
         self.lastSpritePattern = None
 
-        self.tileIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
-        self.paletteIndices = [[0 for y in range(TILE_ROWS)] for x in range(TILE_COLUMNS)]
+        self.tileIndices = [[0 for y in range(self.tileRows())] for x in range(self.tileColumns())]
+        self.paletteIndices = [[0 for y in range(self.tileRows())] for x in range(self.tileColumns())]
 
         self.fpsLastUpdated = None
         self.fpsLastTime = 0
         self.fpsLastDisplayed = 0
         self.secondsPerFrame = None
 
-        self.cscreen = CScreen()
+        self.cscreen = CScreen(self.ppu.mirroring)
+
+    def tileRows(self):
+        return self.ppu.tileRows()
+
+    def tileColumns(self):
+        return self.ppu.tileColumns()
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         self.draw_to_buffer()
@@ -257,6 +265,8 @@ class Screen(object):
         if not DRAW_SPRITES:
             maskState = maskState & ~(0x1 << 4)
         self.cscreen.setMask(maskState)
+
+        self.cscreen.setScrollCoords(self.ppu.scrollX(), self.ppu.scrollY())
 
         self.maintainBgPatternTable()
         self.cscreen.setTileIndices(self.tileIndices)
