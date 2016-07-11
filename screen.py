@@ -10,8 +10,6 @@ import threading
 import time
 import sys
 
-import numpy as np
-
 import palette
 import ppu
 

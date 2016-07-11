@@ -1,5 +1,4 @@
 import sys
-import numpy as np
 
 import palette
 import ppucache
@@ -130,21 +129,6 @@ class PPU(object):
         self.bghighbyte = 0
         self.bgpalette = [0,0,0] # global palette indexes for numbers 1, 2, and 3
         self.universalBg = 0 # global palette index for number 0
-
-        # Whether or not to redraw a background tile. This will get
-        # messier once sprites exist; for now pretend they don't.
-        self.redrawtile = np.invert( # pypy doesn't like np.ones
-            np.zeros((VISIBLE_COLUMNS/8, VISIBLE_SCANLINES/8),
-                     dtype='bool'))
-        # The same thing but for next frame. (We want to fiddle with
-        # this before we're done drawing a given tile)
-        self.nextredrawtile = np.invert(
-                    np.zeros((VISIBLE_COLUMNS/8, VISIBLE_SCANLINES/8),
-                             dtype='bool'))
-
-        self.screenarray = np.zeros((VISIBLE_COLUMNS, VISIBLE_SCANLINES), dtype='uint8')
-        # for sprite 0
-        self.bkgOpacity = np.zeros((VISIBLE_COLUMNS, VISIBLE_SCANLINES), dtype='bool')
 
         self.sleepUntil(VBLANK_START, self.vblankStart)
 
