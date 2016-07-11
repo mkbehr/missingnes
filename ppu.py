@@ -193,6 +193,11 @@ class PPU(object):
             val = ord(val)
         self.latch = val
         if register == REG_PPUCTRL:
+            # TODO: writing to PPUCTRL during rendering will change
+            # the high scroll bits in /t/. This will change the high
+            # bit for horizontal scroll on the next scanline, but the
+            # high bit for vertical scroll will not be affected until
+            # the next frame (unless we write to REG_PPUADDR).
             oldNametableBase = self.nametableBase
             oldBgPatternTableAddr = self.bgPatternTableAddr
 
@@ -215,8 +220,10 @@ class PPU(object):
                 self.flushBgCache()
 
             if self.ppu_debug:
-                print "PPUCTRL (cycle %d): nametableBase = %d (%d)" % (
+                xcycle, ycycle = self.cycleToCoords(self.fineCycle())
+                print "PPUCTRL (cycle %d: %d, %d): nametableBase = %d (%d)" % (
                     self.fineCycle(),
+                    xcycle, ycycle,
                     self.nametableBase,
                     val & 0x3)
 
@@ -248,24 +255,45 @@ class PPU(object):
             self.oamaddr = (self.oamaddr + 1) % OAM_SIZE
         elif register == REG_PPUSCROLL:
             # TODO once scrolling exists, this may affect cache
+
+            # TODO: During rendering, the first write to PPUSCROLL
+            # will update the coarse x scroll in /t/, to be loaded
+            # into /v/ for the next scanline. It will also change the
+            # fine x scroll (horizontal position within a tile)
+            # immediately.
+
             if self.nextScroll == 0:
-                # DEBUG
+                # DEBUG: ignore super mario bros.'s raster effects by
+                # only setting the scroll value during the main
+                # portion of the frame
                 if 10000 < self.fineCycle() < 80000:
                     self.fineScrollX = val
                 # self.fineScrollX = val
                 self.nextScroll = 1
                 if self.ppu_debug:
-                    print "PPUSCROLL (cycle %d): x = %d" % (
-                    self.fineCycle(),
-                    val)
+                    xcycle, ycycle = self.cycleToCoords(self.fineCycle())
+                    print "PPUSCROLL (cycle %d: %d, %d): x = %d" % (
+                        self.fineCycle(), xcycle, ycycle, val)
             else:
                 self.fineScrollY = val
                 self.nextScroll = 0
                 if self.ppu_debug:
-                    print "PPUSCROLL (cycle %d): y = %d" % (
-                    self.fineCycle(),
-                    val)
+                    xcycle, ycycle = self.cycleToCoords(self.fineCycle())
+                    print "PPUSCROLL (cycle %d: %d, %d): y = %d" % (
+                        self.fineCycle(), xcycle, ycycle, val)
         elif register == REG_PPUADDR:
+            # TODO: writing to PPUADDR during rendering will cause
+            # strange effects, because the address register is also
+            # used for the scroll position. The first write sets the
+            # top 2 bits of coarse y scroll, the two nametable bits,
+            # and all 3 bits of fine y scroll in /t/; however, the top
+            # bit of fine y scroll is always set to 0. The second
+            # write sets coarse x scroll and the bottom 3 bits of
+            # coarse y scroll in /t/; then it immediately sets /v/
+            # equal to /t/. This can change both horizontal and
+            # vertical scrolling anywhere; it is the only way to
+            # change horiz. scrolling during a scanline or vert.
+            # scrolling during a frame.
             if self.nextAddr == 0:
                 # addresses past $3fff are mirrored down
                 self.addrHigh = val & 0x3f
@@ -281,6 +309,11 @@ class PPU(object):
             raise RuntimeError("PPU write to bad register %x" % register)
 
     def advanceVram(self):
+        # TODO: advancing vram (on reads or writes to REG_PPUDATA)
+        # during rendering does bizarre things to the scroll values.
+        # Specifically, it increments the coarse component of X and
+        # the fine component of Y (overflowing to coarse if
+        # appropriate).
         if self.vramInc == 0:
             self.ppuaddr += 1
         else:
@@ -487,6 +520,9 @@ class PPU(object):
         # Return the current cycle number, taking into account the
         # number of cycles tracked by the CPU.
         return self.cycle + self.cpu.ppuStoredCycles
+
+    def cycleToCoords(self, cycle):
+        return (cycle % CYCLES_PER_SCANLINE, cycle // CYCLES_PER_SCANLINE)
 
     def flushBgCache(self):
         # Clear our background tile cache: we'll redraw the whole
