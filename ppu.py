@@ -678,3 +678,21 @@ class PPU(object):
         if self.ppu_debug:
             print "No sprite 0 hit"
         return -1
+
+
+    def printTile(self, base, tile):
+        """Print a representation of a tile to stdout. For debug purposes."""
+        import sys
+        for finey in xrange(8):
+            (lowbyte, highbyte) = self.readPtab(base, finey, tile)
+            for finex in xrange(8):
+                pattern = 0
+                if (lowbyte & (1 << (7-finex))):
+                    pattern += 1
+                if (highbyte & (1 << (7-finex))):
+                    pattern += 2
+                if pattern:
+                    sys.stdout.write(str(pattern))
+                else:
+                    sys.stdout.write(".")
+            sys.stdout.write("\n")
