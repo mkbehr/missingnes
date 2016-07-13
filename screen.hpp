@@ -7,28 +7,53 @@
 // defining GLFW_INCLUDE_GLEXT may also be useful in the future
 #include <GLFW/glfw3.h>
 
+// Coordinates in pattern table space.
+typedef float ptab_uv_coord;
+const GLenum GL_PTAB_UV_COORD = GL_FLOAT;
+typedef int ptab_tile_coord;
+const GLenum GL_PTAB_TILE_COORD = GL_INT;
+// Coordinates in nametable space.
+typedef int ntab_coord;
+const GLenum GL_NTAB_COORD = GL_INT;
+// Coordinates in scroll space.
+typedef int scroll_coord;
+const GLenum GL_SCROLL_COORD = GL_INT;
+// Coordinates in pixel space.
+typedef int pixel_coord;
+const GLenum GL_PIXEL_COORD = GL_INT;
+
 // Right now we feed the x and y positions to the shader and also
 // their scroll positions. Is that reasonable? Should we instead be
 // dealing with that in our main code?
-struct glVertex {
-  float x_pos;
-  float y_pos;
-  float x_scroll;
-  float y_scroll;
-  unsigned char tile;
-  unsigned char u;
-  unsigned char v;
+typedef struct glVertex {
+  pixel_coord x_pos;
+  pixel_coord y_pos;
+  float priority; // z coordinate as far as gl's concerned
+  ptab_tile_coord tile;
+  ptab_uv_coord u;
+  ptab_uv_coord v;
   unsigned char palette;
-};
+} glVertex;
 
-struct oamEntry {
+typedef struct oamEntry {
   unsigned char y_minus_one;
   unsigned char tile;
   unsigned char attributes;
   unsigned char x;
-};
+} oamEntry;
 
 static_assert(sizeof(struct oamEntry) == 4, "oamEntry struct has wrong size");
+
+typedef struct scrollChange {
+  scroll_coord ss_x_offset;
+  scroll_coord ss_y_offset;
+  // Naming mismatch between start/end and top/bottom is intentional.
+  // Y coordinates do denote the top and bottom of the region in pixel
+  // spaces, but X coordinates aren't the left/right of the region,
+  // only the start/end of the top/bottom line.
+  pixel_coord ps_x_start;
+  pixel_coord ps_y_top;
+} scrollChange;
 
 // Bitmasks for the attribute byte. I'd love to use a bitfield here
 // instead, but bitfield ordering is implementation-specific and I
@@ -51,23 +76,23 @@ const char *VERTEX_SHADER_FILE = "vertex.vert";
 const char *FRAGMENT_SHADER_FILE = "fragment.frag";
 
 // some of these came from ppu.py, so they're a bit duplicated
-const int SCANLINES = 262;
-const int VISIBLE_SCANLINES = 240;
-const int CYCLES_PER_SCANLINE = 341;
-const int VISIBLE_COLUMNS = 256;
+const pixel_coord SCANLINES = 262;
+const pixel_coord VISIBLE_SCANLINES = 240;
+const pixel_coord CYCLES_PER_SCANLINE = 341;
+const pixel_coord VISIBLE_COLUMNS = 256;
 
 // visible assuming no scrolling
 const int VISIBLE_TILE_ROWS = VISIBLE_SCANLINES/8;
 const int VISIBLE_TILE_COLUMNS = VISIBLE_COLUMNS/8;
 
-const int SCREEN_WIDTH = VISIBLE_COLUMNS;
-const int SCREEN_HEIGHT = VISIBLE_SCANLINES;
+const pixel_coord SCREEN_WIDTH = VISIBLE_COLUMNS;
+const pixel_coord SCREEN_HEIGHT = VISIBLE_SCANLINES;
 
 const int VERTICES_PER_TILE = 6;
 
 // TODO: change to account for differing numbers of nametables
 const int N_NAMETABLES = 2;
-const int N_BG_VERTICES =
+const int SCROLL_SPACE_SIZE =
   VISIBLE_TILE_ROWS * VISIBLE_TILE_COLUMNS * VERTICES_PER_TILE * N_NAMETABLES;
 
 const int PATTERN_TABLE_TILES = 256;
@@ -151,8 +176,9 @@ private:
   GLuint shader;
   // shader attribute locations
   GLint posAttrib;
-  GLint scrollAttrib;
-  GLint tuvAttrib;
+  GLint priorityAttrib;
+  GLint tileAttrib;
+  GLint uvAttrib;
   GLint paletteNAttrib;
 
   // shader uniform locations
@@ -175,7 +201,7 @@ private:
   vector<vector<unsigned char> > tileIndices;
   vector<vector<unsigned char> > paletteIndices;
 
-  struct glVertex bgVertices[N_BG_VERTICES];
+  vector<struct glVertex> bgVertices;
 
   float bgPalettes[LOCAL_PALETTES_LENGTH];
 
@@ -189,6 +215,8 @@ private:
 
   unsigned char maskState;
 
+  vector<scrollChange> scrollChanges;
+
   unsigned int scrollX;
   unsigned int scrollY;
 
@@ -197,10 +225,35 @@ private:
   // methods
 
   void initShaders();
-  void initBgVertices();
+  void setupFrame();
 
-  int tileRows();
-  int tileColumns();
+  ntab_coord tileRows();
+  ntab_coord tileColumns();
+  scroll_coord scrollWidth();
+  scroll_coord scrollHeight();
+
+  void drawBg();
+  void drawSprites();
+
+  void drawVertices(
+    vector<glVertex> &vertices,
+    GLuint vbo,
+    GLuint ptabName,
+    GLenum ptabTex,
+    int ptabTexId,
+    float *palettes
+    );
+
+  void appendRect(
+    vector<glVertex> &vertices,
+    pixel_coord x_left, pixel_coord x_right,
+    pixel_coord y_top, pixel_coord y_bottom,
+    float priority,
+    ptab_tile_coord tile,
+    ptab_uv_coord u_left, ptab_uv_coord u_right,
+    ptab_uv_coord v_top, ptab_uv_coord v_bottom,
+    unsigned char palette_index
+    );
 
 };
 

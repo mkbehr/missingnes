@@ -125,7 +125,7 @@ Screen::Screen(ScrollType st)
 
   // set up state
 
-  initBgVertices();
+  setupFrame();
 
   // there's probably a cleaner c++ way to do this
   tileIndices.resize(tileColumns());
@@ -140,7 +140,7 @@ Screen::Screen(ScrollType st)
   spriteVertices.reserve(OAM_ENTRIES * 6);
 }
 
-int Screen::tileRows() {
+ntab_coord Screen::tileRows() {
   switch(scrollType) {
   case SCROLL_VERTICAL:
     return VISIBLE_TILE_ROWS * 2;
@@ -152,16 +152,24 @@ int Screen::tileRows() {
   }
 }
 
-int Screen::tileColumns() {
+ntab_coord Screen::tileColumns() {
   switch(scrollType) {
   case SCROLL_VERTICAL:
     return VISIBLE_TILE_COLUMNS;
   case SCROLL_HORIZONTAL:
     return VISIBLE_TILE_COLUMNS * 2;
   default:
-    cerr << "tileRows: invalid scroll type\n";
+    cerr << "tileColumns: invalid scroll type\n";
     die();
   }
+}
+
+scroll_coord Screen::scrollWidth() {
+  return (scroll_coord) (tileColumns() * 8);
+}
+
+scroll_coord Screen::scrollHeight() {
+  return (scroll_coord) (tileRows() * 8);
 }
 
 GLint safeGetAttribLocation(GLuint program, const GLchar *name) {
@@ -283,58 +291,22 @@ void Screen::initShaders(void) {
 
   // shader attribute/uniform pointers
   posAttrib = safeGetAttribLocation(shader, "pos");
-  scrollAttrib = safeGetAttribLocation(shader, "scroll");
-  tuvAttrib = safeGetAttribLocation(shader, "v_tuv");
+  priorityAttrib = safeGetAttribLocation(shader, "priority");
+  tileAttrib = safeGetAttribLocation(shader, "tile");
+  uvAttrib = safeGetAttribLocation(shader, "v_uv");
   paletteNAttrib = safeGetAttribLocation(shader, "v_palette_n");
 
   patternTableUniform = safeGetUniformLocation(shader, "patternTable");
   localPalettesUniform = safeGetUniformLocation(shader, "localPalettes");
 }
 
-void Screen::initBgVertices(void) {
-  for (int x = 0; x < tileColumns(); x++) {
-    float x_left = x*8;
-    float x_right = (x+1)*8;
-    for (int y = 0; y < tileRows(); y++) {
-      float y_bottom = (VISIBLE_TILE_ROWS - y - 1) * 8;
-      float y_top = (VISIBLE_TILE_ROWS - y) * 8;
-      float x_scroll = 0; // this will change
-      float y_scroll = 0; // this will change
-      unsigned char tile = 0; // this will change
-      unsigned char u_left = 0;
-      unsigned char u_right = 1;
-      unsigned char v_bottom = 1;
-      unsigned char v_top = 0;
-      unsigned char palette_index = 0; // this will change
-
-      int vertex_index =
-        (x + y*tileColumns()) * VERTICES_PER_TILE;
-
-      struct glVertex bottomLeft =
-        {x_left, y_bottom, x_scroll, y_scroll,
-         tile, u_left, v_bottom, palette_index};
-      struct glVertex bottomRight =
-        {x_right, y_bottom, x_scroll, y_scroll,
-         tile, u_right, v_bottom, palette_index};
-      struct glVertex topLeft =
-        {x_left, y_top, x_scroll, y_scroll,
-         tile, u_left, v_top, palette_index};
-      struct glVertex topRight =
-        {x_right, y_top, x_scroll, y_scroll,
-         tile, u_right, v_top, palette_index};
-
-      // represent square as two triangles
-      // first triangle
-      bgVertices[vertex_index] = bottomLeft;
-      bgVertices[vertex_index+1] = bottomRight;
-      bgVertices[vertex_index+2] = topRight;
-      // second triangle
-      bgVertices[vertex_index+3] = bottomLeft;
-      bgVertices[vertex_index+4] = topRight;
-      bgVertices[vertex_index+5] = topLeft;
-      // TODO: look into using point sprites instead of triangles
-    }
-  }
+void Screen::setupFrame() {
+  // initialize scroll-changes vector
+  scrollChanges.clear();
+  scrollChange topLeftScrollChange =
+    { (scroll_coord) scrollX, (scroll_coord) scrollY,
+      0, 0 };
+  scrollChanges.push_back(topLeftScrollChange);
 }
 
 void Screen::setUniversalBg(int bg) {
@@ -475,10 +447,14 @@ void Screen::drawToBuffer() {
   // - oam needs to be set to the OAM contents
 
   assert(universalBg < N_PALETTES);
-  unsigned char *bgPalette = PALETTE[universalBg];
-  glClearColor(((float) bgPalette[0]) / 255.0,
-               ((float) bgPalette[1]) / 255.0,
-               ((float) bgPalette[2]) / 255.0,
+  // Do not confuse universalBgPalette with bgPalettes!
+  // universalBgPalette refers to the single background color, and
+  // bgPalettes refers to the set of background tiles that make up a
+  // lot of our rendering.
+  unsigned char *universalBgPalette = PALETTE[universalBg];
+  glClearColor(((float) universalBgPalette[0]) / 255.0,
+               ((float) universalBgPalette[1]) / 255.0,
+               ((float) universalBgPalette[2]) / 255.0,
                1.0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -486,211 +462,18 @@ void Screen::drawToBuffer() {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
   if (maskState & MASK_MASK_BKG) {
-    glBindBuffer(GL_ARRAY_BUFFER, bgVbo);
-
-    // From python implementation comments:
-    // We need to do this here (anytime before the draw call) and I
-    // don't understand why. The order is important for some reason.
-    glActiveTexture(BG_PATTERN_TABLE_TEXTURE);
-    glBindTexture(GL_TEXTURE_2D, bgPtabName);
-
-    // do we need to call these again? unclear. python code did it but
-    // I don't know why.
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    checkGlErrors(0);
-
-    // Set scroll, tile and palette.
-    // The rest of the values in the VBO won't change.
-    for (int x = 0; x < tileColumns(); x++) {
-      for (int y = 0; y < tileRows(); y++) {
-        unsigned char tile = tileIndices[x][y];
-        unsigned char palette = paletteIndices[x][y];
-        float sx = scrollX;
-        float sy = scrollY;
-        // Deal with wrapping here. If a tile scrolls wholly off the
-        // left of the screen, wrap it back. (Bit of a hack.)
-
-        // TODO: handle case where a tile is partially visible on one
-        // side of the screen but also partially visible on the other.
-
-        int xRight = (x+1)*8;
-        if (sx > xRight) {
-          sx -= tileColumns() * 8;
-        }
-        int yTop = (VISIBLE_TILE_ROWS-y)*8;
-        if (sy > yTop) {
-          sy -= tileRows() * 8;
-        }
-        int screen_tile_index = (x + y*tileColumns()) * VERTICES_PER_TILE;
-        for (int vertex_i = 0; vertex_i < VERTICES_PER_TILE; vertex_i++) {
-          bgVertices[screen_tile_index + vertex_i].x_scroll = sx;
-          bgVertices[screen_tile_index + vertex_i].y_scroll = sy;
-          bgVertices[screen_tile_index + vertex_i].tile = tile;
-          bgVertices[screen_tile_index + vertex_i].palette = palette;
-        }
-      }
-    }
-
-    int stride = sizeof(struct glVertex);
-    glBufferData(GL_ARRAY_BUFFER, N_BG_VERTICES * sizeof(struct glVertex),
-                 bgVertices, GL_DYNAMIC_DRAW);
-    checkGlErrors(0);
-    glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, x_pos));
-    glEnableVertexAttribArray(posAttrib);
-    checkGlErrors(0);
-    glVertexAttribPointer(scrollAttrib, 2, GL_FLOAT, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, x_scroll));
-    glEnableVertexAttribArray(scrollAttrib);
-    checkGlErrors(0);
-    glVertexAttribPointer(tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, tile));
-    glEnableVertexAttribArray(tuvAttrib);
-    checkGlErrors(0);
-    glVertexAttribPointer(paletteNAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, palette));
-    glEnableVertexAttribArray(paletteNAttrib);
-    checkGlErrors(0);
-
-    glUniform1i(patternTableUniform, BG_PATTERN_TABLE_TEXID);
-    checkGlErrors(0);
-
-    // FIXME magic number 16
-    glUniform4fv(localPalettesUniform, 16, bgPalettes);
-    checkGlErrors(0);
-
-    glDrawArrays(GL_TRIANGLES, 0, N_BG_VERTICES);
-    checkGlErrors(0);
+    drawBg();
   }
   if (maskState & MASK_MASK_SPRITE) {
-    glBindBuffer(GL_ARRAY_BUFFER, spriteVbo);
-
-    glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE);
-    glBindTexture(GL_TEXTURE_2D, spritePtabName);
-
-    // still don't remember why/whether these glTexParameteri calls
-    // are necessary
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    spriteVertices.resize(0);
-
-    for (int oam_i = 0; oam_i < OAM_ENTRIES; oam_i++) {
-      // TODO deal with maximum sprites per scanline
-      struct oamEntry sprite = oam[oam_i];
-      if (sprite.y_minus_one >= 0xef) {
-          // The sprite is wholly off the screen; ignore it
-          continue;
-        }
-      // preceding check ensures this won't overflow
-      unsigned char spritetop = sprite.y_minus_one + 1;
-
-      float x_left = sprite.x;
-      float x_right = sprite.x + 8;
-
-      float y_top = SCREEN_HEIGHT - sprite.y_minus_one - 1;
-      float y_bottom = y_top - 8;
-
-      // Note: sprites do not scroll
-      float x_scroll = 0;
-      float y_scroll = 0;
-
-      unsigned char u_left =
-        (sprite.attributes & OAM_FLIP_HORIZONTAL ? 1 : 0);
-      unsigned char u_right = 1 - u_left;
-
-      unsigned char v_top =
-        (sprite.attributes & OAM_FLIP_VERTICAL ? 1 : 0);
-      unsigned char v_bottom = 1 - v_top;
-
-      unsigned char tile = sprite.tile;
-      unsigned char palette_index = (sprite.attributes & OAM_PALETTE);
-
-      if (DONKEY_KONG_BIG_HEAD_MODE) {
-        // The main head tiles seem to be the even-numbered tiles in
-        // the first 4 rows of 16 tiles each. (There are more for
-        // various special states but I'll ignore them.)
-        if ((tile < 0x40) && ((tile % 2) == 0)) {
-          // I forgot to check for overflow here but the result is
-          // hilarious so I'm gonna leave it in
-	  y_top += DONKEY_KONG_BIG_HEAD_INCREASE;
-	  // The back-of-head tiles seem to be at multiples of 4, and
-	  // the front-of-head tiles are at 2 plus a multiple of 4.
-	  // They're all facing to the right.
-	  int is_head_front = (tile % 4);
-	  // Stretch front head to the right and back head to the
-	  // left, unless it's horizontally mirrored.
-          if ((!!is_head_front) != (!!(sprite.attributes & OAM_FLIP_HORIZONTAL))) {
-            x_right += DONKEY_KONG_BIG_HEAD_INCREASE;
-	  } else {
-	    if (x_left <= DONKEY_KONG_BIG_HEAD_INCREASE) {
-	      x_left = 0;
-	    } else {
-	      x_left -= DONKEY_KONG_BIG_HEAD_INCREASE;
-	    }
-	  }
-	}
-      }
-
-      struct glVertex bottomLeft =
-        {x_left, y_bottom, x_scroll, y_scroll,
-         tile, u_left, v_bottom, palette_index};
-      struct glVertex bottomRight =
-        {x_right, y_bottom, x_scroll, y_scroll,
-         tile, u_right, v_bottom, palette_index};
-      struct glVertex topLeft =
-        {x_left, y_top, x_scroll, y_scroll,
-         tile, u_left, v_top, palette_index};
-      struct glVertex topRight =
-        {x_right, y_top, x_scroll, y_scroll,
-         tile, u_right, v_top, palette_index};
-
-      // first triangle
-      spriteVertices.push_back(bottomLeft);
-      spriteVertices.push_back(bottomRight);
-      spriteVertices.push_back(topRight);
-      // second triangle
-      spriteVertices.push_back(bottomLeft);
-      spriteVertices.push_back(topRight);
-      spriteVertices.push_back(topLeft);
-    }
-    // Not sure whether or not this code all needs to be repeated -
-    // it's mostly the same as the bg code. Only differences are
-    // pattern table, palettes, and number of vertices drawn.
-    int stride = sizeof(struct glVertex);
-    glBufferData(GL_ARRAY_BUFFER, spriteVertices.size() * sizeof(struct glVertex),
-                 spriteVertices.data(), GL_DYNAMIC_DRAW);
-    checkGlErrors(0);
-    glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, x_pos));
-    glEnableVertexAttribArray(posAttrib);
-    checkGlErrors(0);
-    glVertexAttribPointer(scrollAttrib, 2, GL_FLOAT, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, x_scroll));
-    glEnableVertexAttribArray(scrollAttrib);
-
-    checkGlErrors(0);
-    glVertexAttribPointer(tuvAttrib, 3, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, tile));
-    glEnableVertexAttribArray(tuvAttrib);
-    checkGlErrors(0);
-    glVertexAttribPointer(paletteNAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
-                          (const GLvoid *) offsetof(struct glVertex, palette));
-    glEnableVertexAttribArray(paletteNAttrib);
-    checkGlErrors(0);
-
-    glUniform1i(patternTableUniform, SPRITE_PATTERN_TABLE_TEXID);
-    checkGlErrors(0);
-
-    // FIXME magic number 16
-    glUniform4fv(localPalettesUniform, 16, spritePalettes);
-    checkGlErrors(0);
-
-    glDrawArrays(GL_TRIANGLES, 0, spriteVertices.size());
-    checkGlErrors(0);
+    drawSprites();
   }
+  // Drawing is done. Now set up the next frame.
+
+  // TODO: This isn't the right place to do the work that this
+  // function does. It currently depends on the scroll position at the
+  // start of the frame.
+
+  setupFrame();
 }
 
 int Screen::draw() {
@@ -701,6 +484,434 @@ int Screen::draw() {
     return 1;
   }
   return 0;
+}
+
+/*
+ * So for accurate behavior, our background drawing will actually have
+ * to work something like this:
+ *
+ * - First of all, we throw away our assumption that we have a fixed
+ *   number of tiles we're drawing to opengl. That won't be a problem,
+ *   just track things in a vector.
+ *
+ * - We simulate scanning across the image, pixel by pixel. (Of
+ *   course, we'll optimize this so we don't actually spend time
+ *   thinking about every pixel on the screen)
+ *
+ * - For every pixel, if we haven't drawn a tile to cover it, we'll
+ *   draw the appropriate tile. Depending on the scroll coordinates,
+ *   the top-left of the tile will either be exactly on that pixel, or
+ *   up to 7 tiles above and/or to the left of it.
+ *
+ * - We will also track a list of changes to the scroll variables.
+ *   When we hit a change, we'll have to render new tiles for every
+ *   subsequent pixel. This may involve rendering only part of a tile,
+ *   in case e.g. we start drawing halfway down a tile. We can do that
+ *   by drawing a rectangle and changing the uv coordinates
+ *   correspondingly. For every change we hit, we'll increment a
+ *   z-coordinate so that the new tiles overlap the old ones.
+ */
+
+void Screen::drawVertices(
+  vector<glVertex> &vertices,
+  GLuint vbo,
+  GLuint ptabName,
+  GLenum ptabTex,
+  int ptabTexId,
+  float *palettes
+  ) {
+
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+  // From python implementation comments:
+  // We need to do this here (anytime before the draw call) and I
+  // don't understand why. The order is important for some reason.
+  glActiveTexture(ptabTex);
+  glBindTexture(GL_TEXTURE_2D, ptabName);
+
+  // do we need to call these again? unclear. python code did it but
+  // I don't know why.
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+  checkGlErrors(0);
+
+  int stride = sizeof(glVertex);
+  glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glVertex),
+               vertices.data(), GL_DYNAMIC_DRAW);
+  checkGlErrors(0);
+  glVertexAttribPointer(posAttrib, 2, GL_PIXEL_COORD, GL_FALSE, stride,
+                        (const GLvoid *) offsetof(glVertex, x_pos));
+  glEnableVertexAttribArray(posAttrib);
+  checkGlErrors(0);
+  glVertexAttribPointer(priorityAttrib, 1, GL_FLOAT, GL_FALSE, stride,
+                        (const GLvoid *) offsetof(glVertex, priority));
+  glEnableVertexAttribArray(priorityAttrib);
+  checkGlErrors(0);
+  glVertexAttribPointer(tileAttrib, 1, GL_PTAB_TILE_COORD, GL_FALSE, stride,
+                        (const GLvoid *) offsetof(glVertex, tile));
+  glEnableVertexAttribArray(tileAttrib);
+  checkGlErrors(0);
+  glVertexAttribPointer(uvAttrib, 2, GL_PTAB_UV_COORD, GL_FALSE, stride,
+                        (const GLvoid *) offsetof(glVertex, u));
+  glEnableVertexAttribArray(uvAttrib);
+  checkGlErrors(0);
+  glVertexAttribPointer(paletteNAttrib, 1, GL_UNSIGNED_BYTE, GL_FALSE, stride,
+                        (const GLvoid *) offsetof(glVertex, palette));
+  glEnableVertexAttribArray(paletteNAttrib);
+  checkGlErrors(0);
+
+  glUniform1i(patternTableUniform, ptabTexId);
+  checkGlErrors(0);
+
+  // FIXME magic number 16
+  glUniform4fv(localPalettesUniform, 16, palettes);
+  checkGlErrors(0);
+
+  glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+  checkGlErrors(0);
+}
+
+void Screen::drawBg() {
+
+  /*
+   * Over the course of rendering, we'll need to transform between
+   * several different coordinate spaces. I'll give them some names
+   * here.
+   *
+   * /Pattern table space/ represents the contents of the NES's
+   * pattern tables, which store the images to be displayed for each
+   * tile. We represent pattern tables with three dimensions: the tile
+   * coordinate distinguishes between entries in a pattern table, and
+   * the u and v coordinates correspond to the horizontal and vertical
+   * location within a tile. The fragment shader does the job of
+   * converting coordinates in this space to actual colors.
+   *
+   * /Pixel space/ represents the NES's screen in pixel units. It
+   * ranges from (x = 0, y = 0) to (x = 256, y = 240).
+   *
+   * /Scroll space/ represents the image before scrolling is applied.
+   * Each of its dimensions is either equal to the corresponding pixel
+   * space dimension or double the corresponding dimension. Scroll
+   * space is toroidal: scrolling off the left of scroll space takes a
+   * tile to the right, and scrolling off the bottom takes it to the
+   * top.
+   *
+   * A /scroll region/ is a mapping between a region of pixel space
+   * and a region of scroll space. It's specified by three
+   * coordinates: a start coordinate in pixel space, an end coordinate
+   * in pixel space, and an offset coordinate in scroll space. We have
+   * (ssCoord = psCoord + ssOffset). Scroll regions aren't
+   * rectangular: they represent regions of time as the PPU sweeps
+   * across pixels, so they wrap around scanlines. For example, if a
+   * scroll region started 3/4 of the way through scanline 1 and ended
+   * 1/4 of the way through scanline 3, it would contain the last 1/4
+   * of scanline 1, all of scanline 2, and the first 1/4 of scanline
+   * 3:
+   *
+   *   ..................++++++
+   *   ++++++++++++++++++++++++
+   *   ++++++..................
+   *
+   * /Nametable space/ is scroll space, but represented in tiles
+   * instead of pixels.
+   *
+   * /GL space/ is the coordinate space of the screen as OpenGL
+   * represents it after the vertex shader. The vertex shader is in
+   * charge of converting from pixel space to GL space; we don't need
+   * to worry about it anywhere else.
+   *
+   *
+   *
+   * So the way background rendering works is as follows:
+   *
+   * 1. Divide pixel space into scroll regions.
+   *
+   * 2. For each scroll region, look at the corresponding area in
+   * scroll space, and look at the tile boundaries, between the
+   * corresponding tiles in nametable space. Create one pixel-space
+   * rectangle in the vertex vector (six vertices) for each tile. Clip
+   * the rectangles on the top and left; don't bother for the bottom
+   * and right. For the tile containing the start of the scroll
+   * region, we may need to make two rectangles. Each vertex in these
+   * rectangles has u and v coordinates, corresponding to its location
+   * in the unclipped tile, and a tile coordinate from the tile's
+   * contents in nametable space. So each vertex has a pixel-space
+   * coordinate and a pattern-table-space coordinate.
+   *
+   * 3. The vertex shader sees the pixel-space coordinates of the
+   * polygons comprising the tiles, and maps them to GL space.
+   *
+   * 4. The fragment shader sees the pattern-table-space coordinates
+   * and maps them to actual colors (with the help of palettes).
+   *
+   */
+
+  // For this function, I'll be using hungarian notation with prefix
+  // ss to represent screen-space coords, ps to represent pixel-space
+  // coords, and nts to represent nametable-space coords.
+
+  // TODO: actually do something with the z coord here. We need to
+  // increase it as we change scroll regions, pass it into the shader,
+  // and make the necessary changes for the shader to use it.
+  float priority = 0.0;
+
+  // Clear our vertex collection, but request that its memory not be
+  // deallocated. In practice, it looks like memory won't be
+  // deallocated under most compilers anyway, but (according to
+  // cplusplus.com) the spec doesn't guarantee either way.
+  bgVertices.reserve(bgVertices.size());
+  bgVertices.clear();
+
+  // The first element of the scroll changes vector needs to contain
+  // the initial scroll state of the frame. Assert that there is a
+  // first element and that it does in fact start at the beginning of
+  // the screen.
+  assert(scrollChanges.size() > 0);
+  assert(scrollChanges.at(0).ps_x_start == 0);
+  assert(scrollChanges.at(0).ps_y_top == 0);
+
+  for (vector<scrollChange>::iterator it = scrollChanges.begin();
+       it < scrollChanges.end();
+       it++) {
+
+    // pixel-space boundary coordinates of scroll region
+    pixel_coord psRegionXStart = it->ps_x_start;
+    pixel_coord psRegionYTop = it->ps_y_top;
+    pixel_coord psRegionXEnd, psRegionYBottom;
+    if (it+1 == scrollChanges.end()) {
+      psRegionYBottom = VISIBLE_SCANLINES - 1;
+      psRegionXEnd = VISIBLE_COLUMNS;
+    } else {
+      // While we're here, check to make sure the scroll regions are
+      // strictly increasing over pixel space, lexicographically
+      assert(((it+1)->ps_y_top > it->ps_y_top)
+             ||
+             (((it+1)->ps_y_top == it->ps_y_top)
+              &&
+              ((it+1)->ps_x_start > it->ps_x_start)));
+    }
+    // We'd also better still be on the screen. This puts bounds on
+    // the start coordinates; between that and asserting that start
+    // coordinates are strictly increasing (lexicographically), we
+    // have a bound on how long this loop is allowed to continue, so
+    // we'll catch errors that'd make it go very long.
+    assert(psRegionXStart < VISIBLE_COLUMNS);
+    assert(psRegionYTop < VISIBLE_SCANLINES);
+
+    // scroll-space offset coordinates of scroll region
+    scroll_coord ssScrollX = it->ss_x_offset;
+    scroll_coord ssScrollY = it->ss_y_offset;
+    scroll_coord ssFineScrollX = ssScrollX % 8;
+    scroll_coord ssFineScrollY = ssScrollY % 8;
+
+
+    // Iterate through every tile represented in our scroll region.
+    // psTileTop and psTileLeft represent the top-left coordinates of
+    // the tile /before/ clipping.
+
+    // Start at the pixel-space boundaries of the scroll region and
+    // subtract the fine scroll. This will put us at the boundary of
+    // the first tile to appear on the screen.
+    for (pixel_coord psTileTop =
+           psRegionYTop - (pixel_coord) ssFineScrollY;
+         psTileTop < psRegionYBottom;
+         psTileTop += 8) {
+
+      scroll_coord ssTileTop =
+        (psTileTop + ssScrollY) % scrollHeight();
+      assert(0 <= ssTileTop < scrollHeight());
+      assert(ssTileTop % 8 == 0);
+      ntab_coord ntsTileY = (ntab_coord) (ssTileTop / 8);
+
+
+      // The x-coordinate starts similarly to the y-coordinate, except
+      // that it always starts at the left of the screen (and goes to
+      // the right).
+      for (pixel_coord psTileLeft =
+             - (pixel_coord) ssFineScrollX;
+           psTileLeft < VISIBLE_COLUMNS;
+           psTileLeft += 8) {
+
+        int ssTileLeft =
+          (psTileLeft + ssScrollX) % scrollWidth();
+        assert(0 <= ssTileLeft < scrollWidth());
+        assert(ssTileLeft % 8 == 0);
+        ntab_coord ntsTileX = (ntab_coord) (ssTileLeft / 8);
+
+
+
+        /* TODO: clip the top and left of the tile, according to the
+         * following rules:
+         *
+         * - If we're above the top of the scroll region, and entirely
+         *   to the left (i.e. our pixel-space x is >= the start
+         *   coord's x), then clip y to the start coord's y, and clip
+         *   v accordingly.
+         *
+         * - If we're above /or at/ the top, and entirely to the right
+         *   (our rightmost pixel space x is < the start coord's x),
+         *   then clip y to the start coord's y plus 1, and clip v
+         *   accordingly.
+         *
+         * - If we're above or at the top, and our x boundaries
+         *   straddle the start, then we actually need to spilt this
+         *   into two rectangles.
+         *
+         */
+
+
+        pixel_coord psRectLeft = psTileLeft;
+        pixel_coord psRectRight = psTileLeft + 8;
+        pixel_coord psRectTop = psTileTop;
+        pixel_coord psRectBottom = psTileTop + 8;
+
+        // bottom-right of uv coordinates is always 1,1. Top-right is
+        // clipped if rectangle is clipped.
+        ptab_tile_coord tile = tileIndices[ntsTileX][ntsTileY];
+        ptab_uv_coord u_left = 0.0 + (psRectLeft - psTileLeft) / 8.0;
+        ptab_uv_coord u_right = 1.0;
+        ptab_uv_coord v_top = 0.0 + (psRectTop - psTileTop) / 8.0;
+        ptab_uv_coord v_bottom = 1.0;
+
+        int palette_index = paletteIndices[ntsTileX][ntsTileY];
+
+
+        appendRect(
+          bgVertices,
+          psRectLeft, psRectRight, psRectTop, psRectBottom,
+          priority, // TODO we don't do anything with priority so far
+          tile, u_left, u_right, v_top, v_bottom,
+          palette_index);
+      } // loop over x coordinates
+    } // loop over y coordinates
+  } // loop over scrollChanges
+
+  // We've set up the bgVertices vector, so now send over all those
+  // vertices to opengl.
+
+  drawVertices(bgVertices,
+               bgVbo, bgPtabName, BG_PATTERN_TABLE_TEXTURE,
+               BG_PATTERN_TABLE_TEXID, bgPalettes);
+
+}
+
+void Screen::drawSprites() {
+  glBindBuffer(GL_ARRAY_BUFFER, spriteVbo);
+
+  glActiveTexture(SPRITE_PATTERN_TABLE_TEXTURE);
+  glBindTexture(GL_TEXTURE_2D, spritePtabName);
+
+  // still don't remember why/whether these glTexParameteri calls
+  // are necessary
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+  spriteVertices.resize(0);
+
+  for (int oam_i = 0; oam_i < OAM_ENTRIES; oam_i++) {
+    // TODO deal with maximum sprites per scanline
+    oamEntry sprite = oam[oam_i];
+    if (sprite.y_minus_one >= 0xef) {
+      // The sprite is wholly off the screen; ignore it
+      continue;
+    }
+    // preceding check ensures this won't overflow
+    unsigned char spritetop = sprite.y_minus_one + 1;
+
+    pixel_coord x_left = sprite.x;
+    pixel_coord x_right = sprite.x + 8;
+
+    pixel_coord y_top = sprite.y_minus_one + 1;
+    pixel_coord y_bottom = y_top + 8;
+
+    ptab_uv_coord u_left =
+      (sprite.attributes & OAM_FLIP_HORIZONTAL ? 1 : 0);
+    ptab_uv_coord u_right = 1 - u_left;
+
+    ptab_uv_coord v_top =
+      (sprite.attributes & OAM_FLIP_VERTICAL ? 1 : 0);
+    ptab_uv_coord v_bottom = 1 - v_top;
+
+    ptab_tile_coord tile = sprite.tile;
+    unsigned char palette_index = (sprite.attributes & OAM_PALETTE);
+
+    if (DONKEY_KONG_BIG_HEAD_MODE) {
+      // The main head tiles seem to be the even-numbered tiles in
+      // the first 4 rows of 16 tiles each. (There are more for
+      // various special states but I'll ignore them.)
+      if ((tile < 0x40) && ((tile % 2) == 0)) {
+        // I forgot to check for overflow here but the result is
+        // hilarious so I'm gonna leave it in
+        y_top += DONKEY_KONG_BIG_HEAD_INCREASE;
+        // The back-of-head tiles seem to be at multiples of 4, and
+        // the front-of-head tiles are at 2 plus a multiple of 4.
+        // They're all facing to the right.
+        int is_head_front = (tile % 4);
+        // Stretch front head to the right and back head to the
+        // left, unless it's horizontally mirrored.
+        if ((!!is_head_front) != (!!(sprite.attributes & OAM_FLIP_HORIZONTAL))) {
+          x_right += DONKEY_KONG_BIG_HEAD_INCREASE;
+        } else {
+          if (x_left <= DONKEY_KONG_BIG_HEAD_INCREASE) {
+            x_left = 0;
+          } else {
+            x_left -= DONKEY_KONG_BIG_HEAD_INCREASE;
+          }
+        }
+      }
+    }
+
+    appendRect(
+      spriteVertices,
+      x_left, x_right,
+      y_top, y_bottom,
+      0.1, // TODO priority
+      tile,
+      u_left, u_right,
+      v_top, v_bottom,
+      palette_index);
+
+  }
+
+  drawVertices(spriteVertices,
+               spriteVbo, spritePtabName,
+               SPRITE_PATTERN_TABLE_TEXTURE,
+               SPRITE_PATTERN_TABLE_TEXID,
+               spritePalettes);
+}
+
+void Screen::appendRect(
+    vector<glVertex> &vertices,
+    pixel_coord x_left, pixel_coord x_right,
+    pixel_coord y_top, pixel_coord y_bottom,
+    float priority,
+    ptab_tile_coord tile,
+    ptab_uv_coord u_left, ptab_uv_coord u_right,
+    ptab_uv_coord v_top, ptab_uv_coord v_bottom,
+    unsigned char palette_index
+    ) {
+  glVertex bottomLeft =
+    {x_left, y_bottom, priority,
+     tile, u_left, v_bottom, palette_index};
+  glVertex bottomRight =
+    {x_right, y_bottom, priority,
+     tile, u_right, v_bottom, palette_index};
+  glVertex topLeft =
+    {x_left, y_top, priority,
+     tile, u_left, v_top, palette_index};
+  glVertex topRight =
+    {x_right, y_top, priority,
+     tile, u_right, v_top, palette_index};
+
+  // first triangle
+  vertices.push_back(bottomLeft);
+  vertices.push_back(bottomRight);
+  vertices.push_back(topRight);
+  // second triangle
+  vertices.push_back(bottomLeft);
+  vertices.push_back(topRight);
+  vertices.push_back(topLeft);
 }
 
 // Polls for keys, returns their state in a one-byte bitfield (masks
@@ -776,23 +987,6 @@ int initWindow(GLFWwindow **window_p) {
 
   *window_p = window;
   return 0;
-}
-
-void Screen::testRenderLoop(void) {
-
-  /* Loop until the user closes the window */
-  while (!glfwWindowShouldClose(window))
-  {
-    drawToBuffer();
-
-    /* Swap front and back buffers */
-    glfwSwapBuffers(window);
-
-    /* Poll for and process events */
-    glfwPollEvents();
-  }
-
-  glfwTerminate();
 }
 
 // ctypes interface
