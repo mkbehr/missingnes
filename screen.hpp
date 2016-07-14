@@ -162,7 +162,8 @@ public:
   void setPaletteIndices(unsigned char *, unsigned int len);
   void setOam(unsigned char *);
   void setMask(unsigned char);
-  void setScrollCoords(unsigned int x, unsigned int y);
+  void startScrollRegion(scroll_coord x_offset, scroll_coord y_offset,
+                         pixel_coord x_start, pixel_coord y_top);
   void setScrollType(ScrollType st);
 
   void testRenderLoop();
@@ -216,9 +217,6 @@ private:
   unsigned char maskState;
 
   vector<scrollChange> scrollChanges;
-
-  unsigned int scrollX;
-  unsigned int scrollY;
 
   ScrollType scrollType;
 

@@ -58,7 +58,7 @@ void _checkGlErrors(int continue_after_err,
 }
 
 Screen::Screen(ScrollType st)
-  : scrollType(st), scrollX(0), scrollY(0)
+  : scrollType(st)
 {
   // Bit of a hack here: initializing the window will change the
   // working directory for some reason, so store it and change it back
@@ -301,12 +301,9 @@ void Screen::initShaders(void) {
 }
 
 void Screen::setupFrame() {
-  // initialize scroll-changes vector
+  // It'll be python's job to set up a scroll region starting at
+  // pixel-space (0,0). We won't do it here.
   scrollChanges.clear();
-  scrollChange topLeftScrollChange =
-    { (scroll_coord) scrollX, (scroll_coord) scrollY,
-      0, 0 };
-  scrollChanges.push_back(topLeftScrollChange);
 }
 
 void Screen::setUniversalBg(int bg) {
@@ -420,9 +417,41 @@ void Screen::setMask(unsigned char m) {
   maskState = m;
 }
 
-void Screen::setScrollCoords(unsigned int x, unsigned int y) {
-  scrollX = x;
-  scrollY = y;
+/* Record the start of a scroll region according to its scroll-space
+ * offset and pixel-space start coordinates.
+ *
+ * The first scroll region of a frame must start at pixel space (0,0).
+ * Each subsequent scroll regions must start later than the last one,
+ * in lexicographic order on pixel-space y and x coordinates. If the
+ * pixel-space coordinates are the same as the last scroll region,
+ * this doesn't create a new scroll region but instead updates the
+ * last one.
+ */
+void Screen::startScrollRegion(scroll_coord x_offset, scroll_coord y_offset,
+                               pixel_coord x_start, pixel_coord y_top) {
+  assert(x_start < VISIBLE_COLUMNS);
+  assert(y_top < VISIBLE_SCANLINES);
+
+  if (!scrollChanges.empty() &&
+      (y_top == scrollChanges.back().ps_y_top) &&
+      (x_start == scrollChanges.back().ps_x_start)) {
+    // We're updating an old scroll region
+    scrollChanges.back().ss_x_offset = x_offset;
+    scrollChanges.back().ss_y_offset = y_offset;
+  } else {
+    // We're starting a new scroll region
+    if (scrollChanges.empty()) {
+      // First scroll region needs to start at pixel space (0,0)
+      assert(y_top == 0);
+      assert(x_start == 0);
+    } else {
+      // Enforce lexicographic ordering of scroll regions
+      assert((y_top > scrollChanges.back().ps_y_top) ||
+             ((y_top == scrollChanges.back().ps_y_top) &&
+              (x_start > scrollChanges.back().ps_x_start)));
+    }
+    scrollChanges.push_back({x_offset, y_offset, x_start, y_top});
+  }
 }
 
 void Screen::setScrollType(ScrollType st) {
@@ -731,8 +760,12 @@ void Screen::drawBg() {
       scroll_coord ssTileTop =
         (psTileTop + ssScrollY) % scrollHeight();
       assert(0 <= ssTileTop < scrollHeight());
-      assert(ssTileTop % 8 == 0);
-      ntab_coord ntsTileY = (ntab_coord) (ssTileTop / 8);
+      // Use div to make sure we do truncating division, no matter
+      // what type we've defined scroll_coord as. We can't just divide
+      // ssTileTop by 8 because ssTileTop will not be tile-aligned if
+      // we're at the top of the region and the region top is not
+      // aligned.
+      ntab_coord ntsTileY = (ntab_coord) div(ssTileTop, 8).quot;
 
 
       // The x-coordinate starts similarly to the y-coordinate, except
@@ -746,6 +779,8 @@ void Screen::drawBg() {
         int ssTileLeft =
           (psTileLeft + ssScrollX) % scrollWidth();
         assert(0 <= ssTileLeft < scrollWidth());
+        // FIXME: similar to the y boundary, this will be misaligned
+        // if we're at the region top and our x-start is misaligned.
         assert(ssTileLeft % 8 == 0);
         ntab_coord ntsTileX = (ntab_coord) (ssTileLeft / 8);
 
@@ -771,10 +806,12 @@ void Screen::drawBg() {
          */
 
 
+        // Calculate rectangle boundaries. Top and left may not be
+        // tile-aligned, but bottom and right must be.
         pixel_coord psRectLeft = psTileLeft;
         pixel_coord psRectRight = psTileLeft + 8;
         pixel_coord psRectTop = psTileTop;
-        pixel_coord psRectBottom = psTileTop + 8;
+        pixel_coord psRectBottom = psTileTop + 8 - (pixel_coord) (ssTileLeft % 8);
 
         // bottom-right of uv coordinates is always 1,1. Top-right is
         // clipped if rectangle is clipped.
@@ -1048,8 +1085,12 @@ extern "C" {
     sc->setMask(m);
   }
 
-  void ex_setScrollCoords(Screen *sc, unsigned int x, unsigned int y) {
-    sc->setScrollCoords(x,y);
+  void ex_startScrollRegion(Screen *sc,
+                            int x_offset, int y_offset,
+                            int x_start, int y_top) {
+    sc->startScrollRegion(
+      (scroll_coord) x_offset, (scroll_coord) y_offset,
+      (pixel_coord) x_start, (pixel_coord) y_top);
   }
 
   void ex_drawToBuffer(Screen *sc) {

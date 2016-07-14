@@ -101,8 +101,8 @@ class CScreen(object):
         libscreen.ex_setMask.argtypes = \
         [c_void_p, c_ubyte]
 
-        libscreen.ex_setScrollCoords.argtypes = \
-        [c_void_p, c_uint, c_uint]
+        libscreen.ex_startScrollRegion.argtypes = \
+        [c_void_p, c_int, c_int, c_int, c_int]
 
         libscreen.ex_draw.argtypes = [c_void_p]
         libscreen.ex_draw.restype = c_int
@@ -160,8 +160,10 @@ class CScreen(object):
     def setMask(self, m):
         self.libscreen.ex_setMask(self.screen_p, m)
 
-    def setScrollCoords(self, x, y):
-        self.libscreen.ex_setScrollCoords(self.screen_p, x, y)
+    def startScrollRegion(self, x_offset, y_offset, x_start, y_top):
+        self.libscreen.ex_startScrollRegion(self.screen_p,
+                                            x_offset, y_offset,
+                                            x_start, y_top)
 
     def drawToBuffer(self):
         self.libscreen.ex_drawToBuffer(self.screen_p)
@@ -197,6 +199,15 @@ class Screen(object):
 
     def tileColumns(self):
         return self.ppu.tileColumns()
+
+    def initFrame(self):
+        "Bookkeeping that runs at the end of vblank."
+        self.cscreen.startScrollRegion(self.ppu.scrollX(),
+                                       self.ppu.scrollY(),
+                                       0, 0)
+
+    def recordScroll(self, xOffset, yOffset, xStart, yTop):
+        self.cscreen.startScrollRegion(xOffset, yOffset, xStart, yTop)
 
     def tick(self, frame): # TODO consider turning this into a more general callback that the ppu gets
         self.draw_to_buffer()
@@ -265,8 +276,6 @@ class Screen(object):
         if not DRAW_SPRITES:
             maskState = maskState & ~(0x1 << 4)
         self.cscreen.setMask(maskState)
-
-        self.cscreen.setScrollCoords(self.ppu.scrollX(), self.ppu.scrollY())
 
         self.maintainBgPatternTable()
         self.cscreen.setTileIndices(self.tileIndices)

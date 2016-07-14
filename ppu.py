@@ -20,15 +20,7 @@ CYCLES_PER_FRAME = SCANLINES * CYCLES_PER_SCANLINE
 
 VBLANK_START = 241 * CYCLES_PER_SCANLINE + 1
 VBLANK_END = 261 * CYCLES_PER_SCANLINE + 1
-
-# DRAW_CYCLE corresponds to the end of the pre-render line, just
-# between vblank and actual drawing. It's not a state with special
-# meaning to the hardware; we just arbitrarily choose to do all our
-# drawing here. However, we'll need to change that, because there's no
-# one point in time where the PPU's state represents the entire frame.
-# We need to respect changes to certain parts of the state in the
-# middle of drawing the frame.
-DRAW_CYCLE = CYCLES_PER_FRAME - 1
+FRAME_END = CYCLES_PER_FRAME - 1
 
 # If a sprite 0 hit could occur at pixel (0,0), the sprite 0 flag
 # would be raised at this cycle. (This isn't actually possible,
@@ -132,6 +124,10 @@ class PPU(object):
         self.bgpalette = [0,0,0] # global palette indexes for numbers 1, 2, and 3
         self.universalBg = 0 # global palette index for number 0
 
+        # Stored value of y scroll offset, only normally updated
+        # between frames
+        self.tempScrollY = 0
+
         self.sleepUntil(VBLANK_START, self.vblankStart)
 
         from screen import Screen # herp derp circular import
@@ -201,11 +197,7 @@ class PPU(object):
             oldNametableBase = self.nametableBase
             oldBgPatternTableAddr = self.bgPatternTableAddr
 
-            # DEBUG
-            if 10000 < self.fineCycle() < 80000:
-                self.nametableBase = val & 0x3 # bits 0,1
-
-            # self.nametableBase = val & 0x3 # bits 0,1
+            self.nametableBase = val & 0x3 # bits 0,1
             self.vramInc = (val >> 2) & 0x1 # bit 2
             self.spritePatternTableAddr = (val >> 3) & 0x1 # bit 3
             self.bgPatternTableAddr = (val >> 4) & 0x1 # bit 4
@@ -219,13 +211,15 @@ class PPU(object):
                 self.bgPatternTableAddr != oldBgPatternTableAddr):
                 self.flushBgCache()
 
+            if self.nametableBase != oldNametableBase:
+                self.maintainScroll()
+
             if self.ppu_debug:
                 xcycle, ycycle = self.cycleToCoords(self.fineCycle())
-                print "PPUCTRL (cycle %d: %d, %d): nametableBase = %d (%d)" % (
+                print "PPUCTRL (cycle %d: %d, %d): nametableBase = %d" % (
                     self.fineCycle(),
                     xcycle, ycycle,
-                    self.nametableBase,
-                    val & 0x3)
+                    self.nametableBase)
 
             if self.ppuMasterSlave:
                 raise RuntimeError("We set the PPU master/slave bit! That's bad!")
@@ -254,8 +248,6 @@ class PPU(object):
             self.oam[self.oamaddr] = chr(val)
             self.oamaddr = (self.oamaddr + 1) % OAM_SIZE
         elif register == REG_PPUSCROLL:
-            # TODO once scrolling exists, this may affect cache
-
             # TODO: During rendering, the first write to PPUSCROLL
             # will update the coarse x scroll in /t/, to be loaded
             # into /v/ for the next scanline. It will also change the
@@ -263,12 +255,7 @@ class PPU(object):
             # immediately.
 
             if self.nextScroll == 0:
-                # DEBUG: ignore super mario bros.'s raster effects by
-                # only setting the scroll value during the main
-                # portion of the frame
-                if 10000 < self.fineCycle() < 80000:
-                    self.fineScrollX = val
-                # self.fineScrollX = val
+                self.fineScrollX = val
                 self.nextScroll = 1
                 if self.ppu_debug:
                     xcycle, ycycle = self.cycleToCoords(self.fineCycle())
@@ -281,6 +268,8 @@ class PPU(object):
                     xcycle, ycycle = self.cycleToCoords(self.fineCycle())
                     print "PPUSCROLL (cycle %d: %d, %d): y = %d" % (
                         self.fineCycle(), xcycle, ycycle, val)
+                self.maintainScroll()
+
         elif register == REG_PPUADDR:
             # TODO: writing to PPUADDR during rendering will cause
             # strange effects, because the address register is also
@@ -445,6 +434,7 @@ class PPU(object):
     def vblankStart(self):
         if self.ppu_debug:
             print "Starting vblank"
+        self.draw()
         self.vblank = 1
         if self.vblankNMI:
             # signal NMI
@@ -460,11 +450,25 @@ class PPU(object):
         # frame earlier, but I don't want to look up the details right
         # now
         self.sprite0Hit = 0
-        self.sleepUntil(DRAW_CYCLE, self.drawCycle)
+        self.tempScrollY = self.scrollY()
+        if self.ppu_debug:
+            print "Initializing frame with scroll offset (%d, %d)" % (self.scrollX(), self.scrollY())
+        self.pgscreen.initFrame()
+        self.sleepUntil(FRAME_END, self.frameEnd)
 
-    def drawCycle(self):
+    def frameEnd(self):
         self.frame += 1
         self.cycle = -1
+        if self.ppu_debug:
+            print "BEGIN PPU FRAME %d" % self.frame
+        sprite0hit = self.findSprite0Hit()
+        if sprite0hit < 0:
+            self.sleepUntil(VBLANK_START, self.vblankStart)
+        else:
+            self.sleepUntil(sprite0hit, self.flagSprite0Hit)
+
+
+    def draw(self):
         # TODO: if the VRAM address points to something in
         # $3f00-$3fff, set universalBg to that instead of
         # $3f00 (though for exact behavior, this should
@@ -472,15 +476,9 @@ class PPU(object):
         # don't know exactly how often). This is the
         # "background hack".
         self.universalBg = ord(self.cpu.mem.ppuRead(0x3F00)) # TODO no magic numbers
-        sprite0hit = self.findSprite0Hit()
-        if self.ppu_debug:
-            print "BEGIN PPU FRAME %d" % self.frame
+
         # TODO check the frame count for off-by-one errors
         self.pgscreen.tick(self.frame)
-        if sprite0hit < 0:
-            self.sleepUntil(VBLANK_START, self.vblankStart)
-        else:
-            self.sleepUntil(sprite0hit, self.flagSprite0Hit)
 
     def flagSprite0Hit(self):
         if self.ppu_debug:
@@ -679,8 +677,36 @@ class PPU(object):
             print "No sprite 0 hit"
         return -1
 
+    def maintainScroll(self):
+        """Maintains scroll coordinates during rendering by pushing a scroll
+region to the screen module. Does nothing outside of rendering. Can
+safely be called multiple times during the same render frame.
+
+        """
+
+        # Handle scroll updates during rendering. This is not
+        # completely accurate, but it'll work for simple cases. (For
+        # one thing, we should write on a write to the x scroll, not
+        # the y scroll. For another, writes to the x scroll should
+        # modify the low 3 bits immediately but the upper bits at the
+        # end of the line. (But in practice, that last one isn't easy
+        # to control for game-writers.))
+
+        (xStart, yTop) = self.cycleToCoords(self.fineCycle())
+        if xStart > 0:
+            yTop += 1
+            xStart = 0
+        # Check yTop instead of vblank, because we go off the
+        # screen a bit before the vblank flag is actually set.
+        if yTop < VISIBLE_SCANLINES:
+            self.pgscreen.recordScroll(self.scrollX(), self.tempScrollY,
+                                       xStart, yTop)
+
+
+
 
     def printTile(self, base, tile):
+
         """Print a representation of a tile to stdout. For debug purposes."""
         import sys
         for finey in xrange(8):
