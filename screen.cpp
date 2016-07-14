@@ -672,7 +672,7 @@ void Screen::drawBg() {
   assert(scrollChanges.at(0).ps_y_top == 0);
 
   for (vector<scrollChange>::iterator it = scrollChanges.begin();
-       it < scrollChanges.end();
+       it != scrollChanges.end();
        it++) {
 
     // pixel-space boundary coordinates of scroll region
@@ -681,8 +681,15 @@ void Screen::drawBg() {
     pixel_coord psRegionXEnd, psRegionYBottom;
     if (it+1 == scrollChanges.end()) {
       psRegionYBottom = VISIBLE_SCANLINES - 1;
-      psRegionXEnd = VISIBLE_COLUMNS;
+      psRegionXEnd = VISIBLE_COLUMNS - 1;
     } else {
+      if ((it+1)->ps_x_start > 0) {
+        psRegionYBottom = (it+1)->ps_y_top;
+        psRegionXEnd = (it+1)->ps_x_start - 1;
+      } else {
+        psRegionYBottom = (it+1)->ps_y_top - 1;
+        psRegionXEnd = VISIBLE_COLUMNS - 1;
+      }
       // While we're here, check to make sure the scroll regions are
       // strictly increasing over pixel space, lexicographically
       assert(((it+1)->ps_y_top > it->ps_y_top)
@@ -698,6 +705,9 @@ void Screen::drawBg() {
     // we'll catch errors that'd make it go very long.
     assert(psRegionXStart < VISIBLE_COLUMNS);
     assert(psRegionYTop < VISIBLE_SCANLINES);
+
+    assert(psRegionXEnd < VISIBLE_COLUMNS);
+    assert(psRegionYBottom < VISIBLE_SCANLINES);
 
     // scroll-space offset coordinates of scroll region
     scroll_coord ssScrollX = it->ss_x_offset;
