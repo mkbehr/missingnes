@@ -100,6 +100,9 @@ class Memory(object):
                 startaddr = ord(val) * 0x100
                 for i in range(256):
                     self.cpu.ppu.oam[i] = self.read(startaddr + i)
+                # TODO: for perfect accuracy, this should take 514
+                # cycles on an odd CPU cycle and 513 on an even cycle
+                self.cpu.instructionCycleExtra = 514
             elif address == 0x4016:
                 strobe = bool(ord(val) & 1)
                 self.cpu.controller.inputStrobe(strobe)

@@ -85,6 +85,11 @@ class CPU(object):
         # Controller
         self.controller = controller.Controller()
 
+        # If an instruction takes more time than its "cycles"
+        # property, it should set this value to the number of extra
+        # cycles it took.
+        self.instructionCycleExtra = 0
+
         # Now that everything is set up, simulate the RST signal.
         # If we ever track frames, this will affect those.
         self.PC = self.mem.dereference(mem.VEC_RST)
@@ -149,6 +154,8 @@ class CPU(object):
         # TODO this next line can't account for variable cycle counts
         self.excessCycles += instr.cycles
         instr.call(self)
+        self.excessCycles += self.instructionCycleExtra
+        self.instructionCycleExtra = 0
         # self.printState()
 
     def tick(self):
