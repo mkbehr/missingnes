@@ -9,7 +9,7 @@ FORCE_PPU_DEBUG = False
 # Force the sprite 0 hit to occur on a given cycle. Set to None to run
 # detection normally.
 # (Super Mario Bros. wants a hit at frame 10322.)
-FORCE_SPRITE0_CYCLE = 10322
+FORCE_SPRITE0_CYCLE = None
 
 SCANLINES = 262
 VISIBLE_SCANLINES = 240
@@ -291,6 +291,13 @@ class PPU(object):
                 self.addrLow = val
                 self.nextAddr = 0
                 self.ppuaddr = self.addrLow + self.addrHigh * 0x100
+
+                # A hack to represent PPUADDR's effect on the
+                # nametable bits of the scroll coordinates. To
+                # properly represent this, see big comment above.
+                self.nametableBase = (self.addrHigh & 12) >> 2
+                self.maintainScroll()
+
         elif register == REG_PPUDATA:
             self.cpu.mem.ppuWrite(self.ppuaddr, val)
             self.advanceVram()
